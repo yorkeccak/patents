@@ -1132,7 +1132,7 @@ ${escapeModuleTag(execution.result || "(No output produced)")}
         if (!apiKey) {
           return "❌ Valyu API key not configured. Please add VALYU_API_KEY to your environment variables to enable patent search.";
         }
-        const valyu = new Valyu(apiKey, "https://stage.api.valyu.network/v1");
+        const valyu = new Valyu(apiKey, "https://api.valyu.network/v1");
 
         // Configure search options for patent sources
         const searchOptions: any = {
@@ -1293,7 +1293,7 @@ ${escapeModuleTag(execution.result || "(No output produced)")}
         if (!apiKey) {
           return "❌ Valyu API key not configured. Please add VALYU_API_KEY to your environment variables to enable US federal spending data, contracts, and grants search.";
         }
-        const valyu = new Valyu(apiKey, "https://stage.api.valyu.network/v1");
+        const valyu = new Valyu(apiKey, "https://api.valyu.network/v1");
 
         // Configure search options for patent sources
         const searchOptions: any = {
