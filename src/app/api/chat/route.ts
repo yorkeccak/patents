@@ -1,5 +1,5 @@
 import { streamText, convertToModelMessages } from "ai";
-import { everythingTools } from "@/lib/tools";
+import { patentTools } from "@/lib/tools";
 import { HealthcareUIMessage } from "@/lib/types";
 import { openai, createOpenAI } from "@ai-sdk/openai";
 import { createOllama, ollama } from "ollama-ai-provider-v2";
@@ -384,7 +384,7 @@ export async function POST(req: Request) {
     const result = streamText({
       model: selectedModel as any,
       messages: convertToModelMessages(messages),
-      tools: everythingTools,
+      tools: patentTools,
       toolChoice: "auto",
       experimental_context: {
         userId: user?.id,
@@ -402,7 +402,7 @@ export async function POST(req: Request) {
       system: `You are a specialized AI assistant with access to comprehensive tools for clinical trials, drug information, biomedical literature, pharmaceutical analysis, Python code execution, and data visualization.
       
       CRITICAL CITATION INSTRUCTIONS:
-      When you use ANY search tool (financial, web, or Wiley academic search) and reference information from the results in your response:
+      When you use ANY search tool (web, or patents search) and reference information from the results in your response:
       
       1. **Citation Format**: Use square brackets [1], [2], [3], etc.
       2. **Citation Placement**: Place citations at the END of each sentence or paragraph where you reference the information
@@ -421,104 +421,37 @@ export async function POST(req: Request) {
       
       You can:
          
-         - Execute Python code for biostatistics, clinical data analysis, drug discovery calculations, and scientific computations using the codeExecution tool (runs in a secure Daytona Sandbox)
-         - The Python environment can install packages via pip at runtime inside the sandbox (e.g., numpy, pandas, scikit-learn)
-         - Visualization libraries (matplotlib, seaborn, plotly) may work inside Daytona. However, by default, prefer the built-in chart creation tool for standard time series and comparisons. Use Daytona for advanced or custom visualizations only when necessary.
-         - Search for clinical trials data using the clinicalTrialsSearch tool (ongoing trials, completed studies, drug efficacy data)
-         - Look up drug information using the drugInformationSearch tool (FDA labels, contraindications, side effects, drug interactions)
-         - Search biomedical literature using the biomedicalLiteratureSearch tool (PubMed, ArXiv, peer-reviewed papers)
-         - Analyze pharmaceutical companies using the pharmaCompanyAnalysis tool (SEC filings, financial data, competitive intelligence)
-         - Perform comprehensive searches using the comprehensive everythingSearch tool (across all medical data sources)  
-         - Search the web for general news, medical breakthroughs, and health policy updates using the webSearch tool
-         - Search the web for general information using the web search tool (any topic with relevance scoring and cost control)
-         - Create interactive charts and visualizations using the chart creation tool (line charts, bar charts, area charts with multiple data series)
+         - Search for patents and intellectual property using the patentsSearch tool (authoritative patent data, technical disclosures, innovation tracking)
+         - Search the web for general information, news, and research using the webSearch tool (any topic with relevance scoring and cost control)
+         - Search US federal spending data, contracts, and grants using the USAfedSearch tool (authoritative government spending information)
 
       **CRITICAL NOTE**: You must only make max 5 parallel tool calls at a time.
 
       **CRITICAL INSTRUCTIONS**: Your reports must be incredibly thorough and detailed, explore everything that is relevant to the user's query that will help to provide
       the perfect response that is of a level expected of an elite level medical researcher or pharmaceutical analyst at a leading biomedical research institution.
       
-      For data searches, you can access:
-      • Clinical trials from ClinicalTrials.gov (phases, enrollment, outcomes)
-      • FDA drug labels and medication information from DailyMed
-      • Biomedical literature from PubMed and ArXiv
-      • Pharmaceutical company SEC filings and financial reports
-      • Scientific research papers and peer-reviewed studies
-      • Drug development pipelines and regulatory approvals
+      For patents searches, you can access:
+      • Authoritative patent data and technical disclosures from global patent offices
+      • Innovation tracking and intellectual property information relevant to biomedical and pharmaceutical research
       
-      For biomedical literature searches, you can access:
-      • Peer-reviewed medical and biological journals
-      • Clinical research studies and meta-analyses
-      • Drug discovery and development papers
-      • Genomics and precision medicine research
-      • Epidemiological studies and public health data
-      • Medical device trials and regulatory submissions
+      For US federal spending searches, you can access:
+      • Government contracts and spending data
+      • Grant information and funding details
+      • Federal agency spending patterns
+      • Contract award information and vendor data
       
-               For web searches, you can find information on:
+      For web searches, you can find information on:
          • Current events and news from any topic
          • Research topics with high relevance scoring
          • Educational content and explanations
          • Technology trends and developments
          • General knowledge across all domains
          
-         For data visualization, you can create charts when users want to:
-         • Compare clinical trial outcomes across different drugs or treatments
-         • Visualize patient enrollment, efficacy rates, or adverse events over time
-         • Display drug development pipeline stages or trial phase progression
-         • Show relationships between different data series
-         • Present clinical or research data in an easy-to-understand visual format
-
-         Whenever you have time series data for the user (such as patient outcomes, drug efficacy over time, or any clinical data with temporal values), always visualize it using the chart creation tool. Use a line chart by default for time series data, unless another chart type is more appropriate for the context. If you retrieve or generate time series data, automatically create a chart to help the user understand trends and patterns.
-
-         CRITICAL: When using the createChart tool, you MUST format the dataSeries exactly like this:
-         dataSeries: [
-           {
-             name: "Drug A Efficacy",
-             data: [
-               {x: "Week 0", y: 0},
-               {x: "Week 4", y: 45.5},
-               {x: "Week 8", y: 67.8}
-             ]
-           }
-         ]
-         
-         Each data point requires an x field (date/label) and y field (numeric value). Do NOT use other formats like "datasets" or "labels" - only use the dataSeries format shown above.
-
-         When creating charts:
-         • Use line charts for time series data (patient outcomes, drug efficacy over time)
-         • Use bar charts for comparisons between categories (drug effectiveness, adverse event rates)
-         • Use area charts for cumulative data or when showing composition
-         • Always provide meaningful titles and axis labels
-         • Support multiple data series when comparing related metrics
-         • Colors are automatically assigned - focus on data structure and meaningful labels
-
-               Always use the appropriate tools when users ask for calculations, Python code execution, financial information, web queries, or data visualization.
-         Choose the codeExecution tool for any mathematical calculations, financial modeling, data analysis, statistical computations, or when users need to run Python code.
-         
-         CRITICAL: WHEN TO USE codeExecution TOOL:
-         - ALWAYS use codeExecution when the user asks you to "calculate", "compute", "use Python", or "show Python code"
-         - NEVER just display Python code as text - you MUST execute it using the codeExecution tool
-         - If the user asks for calculations with Python, USE THE TOOL, don't just show code
-         - Mathematical formulas should be explained with LaTeX, but calculations MUST use codeExecution
-         
-         CRITICAL PYTHON CODE REQUIREMENTS:
-         1. ALWAYS include print() statements - Python code without print() produces no visible output
-         2. Use descriptive labels and proper formatting in your print statements
-         3. Include units, currency symbols, percentages where appropriate
-         4. Show step-by-step calculations for complex problems
-         5. Use f-string formatting for professional output
-         6. Always calculate intermediate values before printing final results
-          7. Available libraries: You may install and use packages in the Daytona sandbox (e.g., numpy, pandas, scikit-learn). Prefer the chart creation tool for visuals unless an advanced/custom visualization is required.
-          8. Visualization guidance: Prefer the chart creation tool for most charts. Use Daytona-rendered plots only for complex, bespoke visualizations that the chart tool cannot represent.
-         
-          REQUIRED: Every Python script must end with print() statements that show the calculated results with proper labels, units, and formatting. Never just write variable names or expressions without print() - they will not display anything to the user.
-          If generating advanced charts with Daytona (e.g., matplotlib), ensure the code renders the figure (e.g., plt.show()) so artifacts can be captured.
+         Always use the appropriate tools when users ask for web queries or patent searches.
          
          ERROR RECOVERY: If any tool call fails due to validation errors, you will receive an error message explaining what went wrong. When this happens:
          1. Read the error message carefully to understand what fields are missing or incorrect
          2. Correct the tool call by providing ALL required fields with proper values
-         3. For createChart errors, ensure you provide: title, type, xAxisLabel, yAxisLabel, and dataSeries
-         4. For codeExecution tool errors, ensure your code includes proper print() statements
          5. Try the corrected tool call immediately - don't ask the user for clarification
          6. If multiple fields are missing, fix ALL of them in your retry attempt
          
@@ -533,12 +466,9 @@ export async function POST(req: Request) {
          NEVER write LaTeX code directly in text like \frac{r}{n} or \times - it must be inside <math> tags.
          NEVER use $ or $$ delimiters - only use <math>...</math> tags.
          This makes financial formulas much more readable and professional.
-         Choose the clinicalTrialsSearch tool for clinical trial data and study protocols.
-         Choose the drugInformationSearch tool for FDA drug labels and medication information.
-         Choose the biomedicalLiteratureSearch tool for scientific papers and research studies.
-         Choose the pharmaCompanyAnalysis tool for pharmaceutical company analysis and competitive intelligence.
-         Choose the comprehensiveeverythingSearch tool when you need data from multiple sources.
-         Choose the web search tool for general topics, current events, research, and non-financial information.
+         Choose the patentsSearch tool for patent data and technical disclosures.
+         Choose the USAfedSearch tool for US federal spending, contracts, and government funding information.
+         Choose the webSearch tool for general topics, current events, research, and non-financial information.
          Choose the chart creation tool when users want to visualize data, compare metrics, or see trends over time.
 
          When users ask for charts or data visualization, or when you have time series data:
@@ -560,17 +490,12 @@ export async function POST(req: Request) {
       - If you realize you need to correct a previous tool call, immediately issue the correct tool call.
       - If the user asks for multiple items (e.g., multiple companies), you must call the tool for each and only finish when all are processed and summarized.
       - Always continue until you have completed all required tool calls and provided a summary or visualization if appropriate.
-      - NEVER just show Python code as text - if the user wants calculations or Python code, you MUST use the codeExecution tool to run it
-      - When users say "calculate", "compute", or mention Python code, this is a COMMAND to use the codeExecution tool, not a request to see code
-      - NEVER suggest using Python to fetch data from the internet or APIs. All data retrieval must be done via the financialSearch or webSearch tools.
-      - Remember: The Python environment runs in the cloud with NumPy, pandas, and scikit-learn available, but NO visualization libraries.
+      - NEVER suggest using Python to fetch data from the internet or APIs. All data retrieval must be done via the patentsSearch or webSearch tools.
       
       CRITICAL WORKFLOW ORDER:
-      1. First: Complete ALL data gathering (searches, calculations, etc.)
-      2. Then: Create ALL charts/visualizations based on the gathered data
-      3. Finally: Present your final formatted response with analysis
+      1. First: Complete ALL data gathering (searches, etc.)
+      2. Finally: Present your final formatted response with analysis
       
-      This ensures charts appear immediately before your analysis and are not lost among tool calls.
       ---
 
       ---
@@ -604,27 +529,11 @@ export async function POST(req: Request) {
          - Provide executive summaries at the beginning
          - Include key takeaways at the end
 
-      5. **Chart Placement:**
-         - Create ALL charts IMMEDIATELY BEFORE your final response text
-         - First complete all data gathering and analysis tool calls
-         - Then create all necessary charts
-         - Finally present your comprehensive analysis with references to the charts
-         - This ensures charts are visible and not buried among tool calls
-
-      6. **Visual Hierarchy:**
+      5. **Visual Hierarchy:**
          - Start with a brief executive summary
          - Present detailed findings in organized sections
          - Use horizontal rules (---) to separate major sections
-         - End with key takeaways and visual charts
-
-      7. **Code Display Guidelines:**
-         - DO NOT repeat Python code in your final response if you've already executed it with the codeExecution tool
-         - The executed code and its output are already displayed in the tool result box
-         - Only show code snippets in your final response if:
-           a) You're explaining a concept that wasn't executed
-           b) The user specifically asks to see the code again
-           c) You're showing an alternative approach
-         - Reference the executed results instead of repeating the code
+         - End with key takeaways
 
       Remember: The goal is to present ALL retrieved data and facts in the most professional, readable, and visually appealing format possible. Think of it as creating a professional financial report or analyst presentation.
       

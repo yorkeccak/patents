@@ -315,7 +315,7 @@ function logDedupe(
   });
 }
 
-export const everythingTools = {
+export const patentTools = {
   // File reading tools - allow the model to read user-provided files via URLs
   readTextFromUrl: tool({
     description:
@@ -1108,6 +1108,323 @@ ${escapeModuleTag(execution.result || "(No output produced)")}
     },
   }),
 
+  patentsSearch: tool({
+    description: "Patent search for authoritative academic content",
+    inputSchema: z.object({
+      query: z.string().describe("Search query for patent corpus"),
+      maxResults: z
+        .number()
+        .min(1)
+        .max(20)
+        .optional()
+        .default(10)
+        .describe("Maximum number of results to return"),
+    }),
+    execute: async ({ query, maxResults }, options) => {
+      const userId = (options as any)?.experimental_context?.userId;
+      const sessionId = (options as any)?.experimental_context?.sessionId;
+      const userTier = (options as any)?.experimental_context?.userTier;
+      const isDevelopment = process.env.NEXT_PUBLIC_APP_MODE === "development";
+
+      try {
+        // Check if Valyu API key is available
+        const apiKey = process.env.VALYU_API_KEY;
+        if (!apiKey) {
+          return "❌ Valyu API key not configured. Please add VALYU_API_KEY to your environment variables to enable patent search.";
+        }
+        const valyu = new Valyu(apiKey, "https://stage.api.valyu.network/v1");
+
+        // Configure search options for patent sources
+        const searchOptions: any = {
+          maxNumResults: maxResults || 10,
+          includedSources: ["valyu/valyu-patents"],
+        };
+
+        console.log("[PatentsSearch] Search options:", searchOptions);
+
+        // Add timeout configuration to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+        let response;
+        try {
+          response = await valyu.search(query, searchOptions);
+          clearTimeout(timeoutId);
+        } catch (error) {
+          clearTimeout(timeoutId);
+          if (error instanceof Error && error.name === "AbortError") {
+            throw new Error(
+              "Valyu API request timed out after 30 seconds. The API might be slow or unresponsive."
+            );
+          }
+          throw error;
+        }
+
+        // Track Valyu patent search call
+        await track("Valyu API Call", {
+          toolType: "patentsSearch",
+          query: query,
+          maxResults: maxResults || 10,
+          resultCount: response?.results?.length || 0,
+          hasApiKey: !!apiKey,
+          cost: (response as any)?.total_deduction_dollars || null,
+          txId: (response as any)?.tx_id || null,
+        });
+
+        // Track usage for pay-per-use customers with Polar events
+        if (
+          userId &&
+          sessionId &&
+          userTier === "pay_per_use" &&
+          !isDevelopment
+        ) {
+          try {
+            const polarTracker = new PolarEventTracker();
+            const valyuCostDollars =
+              (response as any)?.total_deduction_dollars || 0;
+            console.log("[WileySearch] Tracking Valyu API usage with Polar:", {
+              userId,
+              sessionId,
+              valyuCostDollars,
+              resultCount: response?.results?.length || 0,
+            });
+            await polarTracker.trackValyuAPIUsage(
+              userId,
+              sessionId,
+              "patentsSearch",
+              valyuCostDollars,
+              {
+                query,
+                resultCount: response?.results?.length || 0,
+                success: true,
+                tx_id: (response as any)?.tx_id,
+              }
+            );
+          } catch (error) {
+            console.error(
+              "[PatentsSearch] Failed to track Valyu API usage:",
+              error
+            );
+            // Don't fail the search if usage tracking fails
+          }
+        }
+
+        if (!response || !response.results || response.results.length === 0) {
+          return `🔍 No patent results found for "${query}". Try rephrasing your search.`;
+        }
+
+        // Return structured data for the model to process
+        const formattedResponse = {
+          type: "patents_search",
+          query: query,
+          resultCount: response.results.length,
+          results: response.results.map((result: any) => ({
+            title: result.title || "Patent Result",
+            url: result.url,
+            content: result.content,
+            date: result.metadata?.date,
+            source: result.metadata?.source,
+            dataType: result.data_type,
+            length: result.length,
+            image_url: result.image_url || {},
+            relevance_score: result.relevance_score,
+          })),
+        };
+
+        console.log(
+          "[Patents Search] Formatted response size:",
+          JSON.stringify(formattedResponse).length,
+          "bytes"
+        );
+
+        return JSON.stringify(formattedResponse, null, 2);
+      } catch (error) {
+        if (error instanceof Error) {
+          if (
+            error.message.includes("401") ||
+            error.message.includes("unauthorized")
+          ) {
+            return "🔐 Invalid Valyu API key. Please check your VALYU_API_KEY environment variable.";
+          }
+          if (error.message.includes("429")) {
+            return "⏱️ Rate limit exceeded. Please try again in a moment.";
+          }
+          if (
+            error.message.includes("network") ||
+            error.message.includes("fetch")
+          ) {
+            return "🌐 Network error connecting to Valyu API. Please check your internet connection.";
+          }
+        }
+
+        return `❌ Error searching patent data: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`;
+      }
+    },
+  }),
+
+  USAfedSearch: tool({
+    description:
+      "Search US federal spending data, contracts, and grants from authoritative government sources",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .describe(
+          "Search query for US federal spending data, contracts, and grants"
+        ),
+      maxResults: z
+        .number()
+        .min(1)
+        .max(20)
+        .optional()
+        .default(10)
+        .describe("Maximum number of results to return"),
+    }),
+    execute: async ({ query, maxResults }, options) => {
+      const userId = (options as any)?.experimental_context?.userId;
+      const sessionId = (options as any)?.experimental_context?.sessionId;
+      const userTier = (options as any)?.experimental_context?.userTier;
+      const isDevelopment = process.env.NEXT_PUBLIC_APP_MODE === "development";
+
+      try {
+        // Check if Valyu API key is available
+        const apiKey = process.env.VALYU_API_KEY;
+        if (!apiKey) {
+          return "❌ Valyu API key not configured. Please add VALYU_API_KEY to your environment variables to enable US federal spending data, contracts, and grants search.";
+        }
+        const valyu = new Valyu(apiKey, "https://stage.api.valyu.network/v1");
+
+        // Configure search options for patent sources
+        const searchOptions: any = {
+          maxNumResults: maxResults || 10,
+          includedSources: ["valyu/valyu-us-federal-spending"],
+        };
+
+        console.log("[USAFedSearch] Search options:", searchOptions);
+
+        // Add timeout configuration to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+        let response;
+        try {
+          response = await valyu.search(query, searchOptions);
+          clearTimeout(timeoutId);
+        } catch (error) {
+          clearTimeout(timeoutId);
+          if (error instanceof Error && error.name === "AbortError") {
+            throw new Error(
+              "Valyu API request timed out after 30 seconds. The API might be slow or unresponsive."
+            );
+          }
+          throw error;
+        }
+
+        // Track Valyu patent search call
+        await track("Valyu API Call", {
+          toolType: "USAFedSearch",
+          query: query,
+          maxResults: maxResults || 10,
+          resultCount: response?.results?.length || 0,
+          hasApiKey: !!apiKey,
+          cost: (response as any)?.total_deduction_dollars || null,
+          txId: (response as any)?.tx_id || null,
+        });
+
+        // Track usage for pay-per-use customers with Polar events
+        if (
+          userId &&
+          sessionId &&
+          userTier === "pay_per_use" &&
+          !isDevelopment
+        ) {
+          try {
+            const polarTracker = new PolarEventTracker();
+            const valyuCostDollars =
+              (response as any)?.total_deduction_dollars || 0;
+            console.log("[USAFedSearch] Tracking Valyu API usage with Polar:", {
+              userId,
+              sessionId,
+              valyuCostDollars,
+              resultCount: response?.results?.length || 0,
+            });
+            await polarTracker.trackValyuAPIUsage(
+              userId,
+              sessionId,
+              "USAFedSearch",
+              valyuCostDollars,
+              {
+                query,
+                resultCount: response?.results?.length || 0,
+                success: true,
+                tx_id: (response as any)?.tx_id,
+              }
+            );
+          } catch (error) {
+            console.error(
+              "[USAFedSearch] Failed to track Valyu API usage:",
+              error
+            );
+            // Don't fail the search if usage tracking fails
+          }
+        }
+
+        if (!response || !response.results || response.results.length === 0) {
+          return `🔍 No US federal spending data, contracts, and grants results found for "${query}". Try rephrasing your search.`;
+        }
+
+        // Return structured data for the model to process
+        const formattedResponse = {
+          type: "us_federal_spending_search",
+          query: query,
+          resultCount: response.results.length,
+          results: response.results.map((result: any) => ({
+            title: result.title || "US Federal Spending Result",
+            url: result.url,
+            content: result.content,
+            date: result.metadata?.date,
+            source: result.metadata?.source,
+            dataType: result.data_type,
+            length: result.length,
+            image_url: result.image_url || {},
+            relevance_score: result.relevance_score,
+          })),
+        };
+
+        console.log(
+          "[USAFedSearch] Formatted response size:",
+          JSON.stringify(formattedResponse).length,
+          "bytes"
+        );
+
+        return JSON.stringify(formattedResponse, null, 2);
+      } catch (error) {
+        if (error instanceof Error) {
+          if (
+            error.message.includes("401") ||
+            error.message.includes("unauthorized")
+          ) {
+            return "🔐 Invalid Valyu API key. Please check your VALYU_API_KEY environment variable.";
+          }
+          if (error.message.includes("429")) {
+            return "⏱️ Rate limit exceeded. Please try again in a moment.";
+          }
+          if (
+            error.message.includes("network") ||
+            error.message.includes("fetch")
+          ) {
+            return "🌐 Network error connecting to Valyu API. Please check your internet connection.";
+          }
+        }
+
+        return `❌ Error searching US federal spending data, contracts, and grants data: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`;
+      }
+    },
+  }),
+
   webSearch: tool({
     description:
       "Search the web for general information on any topic using Valyu DeepSearch API with access to both proprietary sources and web content",
@@ -1322,4 +1639,4 @@ ${escapeModuleTag(execution.result || "(No output produced)")}
 };
 
 // Export with both names for compatibility
-export const financeTools = everythingTools;
+export const financeTools = patentTools;

@@ -86,7 +86,6 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import "katex/dist/katex.min.css";
 import katex from "katex";
-import { FinancialChart } from "@/components/financial-chart";
 import { CitationTextRenderer } from "@/components/citation-text-renderer";
 import { CitationMap } from "@/lib/citation-utils";
 import ClinicalTrialsView from "@/components/ClinicalTrialsView";
@@ -113,6 +112,7 @@ import {
 import { SavedResultsProvider } from "@/lib/saved-result-context";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { BackgroundOverlay } from "./ui/background-overlay";
 
 // Debug toggles removed per request
 
@@ -3525,151 +3525,163 @@ export function ChatInterface({
                       </motion.div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 px-2 sm:px-0">
-                        <motion.button
+                        <BackgroundOverlay
+                          defaultBackground=""
+                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaDc2enljZG9pOXA4M2liOGVpcGdoa2RyN3QzaHl5Njh3aXYyeWVvYSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/3o85xC8sdW7vmG6bRe/giphy.gif"
+                          className="h-32 sm:h-36 bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
                           onClick={() =>
                             handlePromptClick(
-                              "Search for the latest news about artificial intelligence developments, machine learning breakthroughs, and tech industry updates from the past month."
+                              "Explain Huawei’s chiplet packaging patent in plain English"
                             )
                           }
-                          className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.3, duration: 0.5 }}
-                          whileTap={{ scale: 0.98 }}
                         >
-                          <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
-                            💻 Tech & AI
-                          </div>
-                          <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
-                            Latest AI news and tech developments
-                          </div>
-                        </motion.button>
-
-                        <motion.button
-                          onClick={() =>
-                            handlePromptClick(
-                              "Aggregate press releases on carbon pricing policies in 2025 from G20 countries. Build a table by country with announced carbon price levels, exemptions, and start dates. Add a short risk assessment."
-                            )
-                          }
-                          className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.4, duration: 0.5 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
-                            🌎 Policy & Society
-                          </div>
-                          <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
-                            Press releases, assessments, and comparisons
-                          </div>
-                        </motion.button>
-
-                        <motion.button
-                          onClick={() =>
-                            handlePromptClick(
-                              "List all London exhibitions (Sept–Oct 2025) involving AI-generated art. Extract curator quotes, thematic descriptions, and visitor attendance numbers. Provide an analysis of public reception trends."
-                            )
-                          }
-                          className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.5, duration: 0.5 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
-                            🎨 Culture & Media
-                          </div>
-                          <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
-                            Cultural, arts, media and trend analysis
-                          </div>
-                        </motion.button>
-
-                        <motion.button
-                          onClick={() =>
-                            handlePromptClick(
-                              "Analyze Moderna's competitive position in the mRNA therapeutics market. Review their latest SEC filings, drug pipeline, ongoing clinical trials, and stock performance. Compare with BioNTech and CureVac. Include patent landscape analysis."
-                            )
-                          }
-                          className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.6, duration: 0.5 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
-                            💼 Pharma Analysis
-                          </div>
-                          <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
-                            Company pipelines & competitive intelligence
-                          </div>
-                        </motion.button>
-
-                        <motion.button
-                          onClick={() =>
-                            handlePromptClick(
-                              "Aggregate player performance stats from the 2025 UEFA Champions League quarterfinals. Rank the top 10 players by expected goals vs. actual goals, and highlight the biggest overperformers/underperformers."
-                            )
-                          }
-                          className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.7, duration: 0.5 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
-                            🏅 Sports & Events
-                          </div>
-                          <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
-                            Latest games, players, and performance stats
-                          </div>
-                        </motion.button>
-
-                        <motion.button
-                          onClick={() =>
-                            handlePromptClick(
-                              "Retrieve 2025 global policy documents on AI in education. Compare the regulatory approaches of US, EU, and Singapore, focusing on student data privacy."
-                            )
-                          }
-                          className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 p-2.5 sm:p-4 rounded-xl border border-blue-200 dark:border-blue-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/30 dark:hover:to-purple-900/30 text-left group col-span-1 sm:col-span-2 lg:col-span-1"
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.8, duration: 0.5 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <div className="text-blue-700 dark:text-blue-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-blue-900 dark:group-hover:text-blue-100">
-                            🎓 Education & Research
-                          </div>
-                          <div className="text-[10px] sm:text-xs text-blue-600 dark:text-blue-400">
-                            Policy documents, regulations, and research
-                          </div>
-                        </motion.button>
-                      </div>
-
-                      <div className="mt-2 sm:mt-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                              Live News
-                            </h3>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              Powered by Valyu
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              handlePromptClick(
-                                "Search for the latest news on bio and pharmeceutical research"
-                              );
-        
-                            }}
-                            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 hover:underline dark:hover:text-blue-300 transition-colors cursor-pointer"
+                          <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.4, duration: 0.5 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="h-full flex flex-col justify-center items-center text-center group"
                           >
-                            more
-                          </button>
-                        </div>
-                        <NewsCarousel />
+                            <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
+                              🔩 Semiconductor & Chiplet
+                            </div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 group-hover:opacity-0 transition-opacity duration-300">
+                              Patent analysis, chiplet packaging, and
+                              semiconductors
+                            </div>
+                          </motion.div>
+                        </BackgroundOverlay>
+
+                        <BackgroundOverlay
+                          defaultBackground=""
+                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3azByemxrNDJ4MW9wOTE3Z202OHVlZHMwdnAzemZqdnZ1Zm5tZjhubSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/MuE9MGdYDmem1FwE0o/giphy.gif"
+                          className="h-32 sm:h-36 bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                          onClick={() =>
+                            handlePromptClick(
+                              "Break down Nintendo’s summoning patent — what mechanics does it cover?"
+                            )
+                          }
+                        >
+                          <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.5, duration: 0.5 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="h-full flex flex-col justify-center items-center text-center group"
+                          >
+                            <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
+                              🎮 Games & Entertainment
+                            </div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 group-hover:opacity-0 transition-opacity duration-300">
+                              Patent analysis, game mechanics, and entertainment
+                            </div>
+                          </motion.div>
+                        </BackgroundOverlay>
+
+                        <BackgroundOverlay
+                          defaultBackground=""
+                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOG4yaTVuMG95eDRidGFpN2JjaDk0aXZpZ29lcjgyaDN0aDY2bXB2MiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/gjAd5llUlKZjom2iuL/giphy.gif"
+                          className="h-32 sm:h-36 bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                          onClick={() =>
+                            handlePromptClick(
+                              "Find the newest AI-driven drug discovery patents and explain their novelty."
+                            )
+                          }
+                        >
+                          <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.6, duration: 0.5 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="h-full flex flex-col justify-center items-center text-center group"
+                          >
+                            <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
+                              💼 AI in Drug Discovery
+                            </div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 group-hover:opacity-0 transition-opacity duration-300">
+                              Drug discovery, patent analysis, and AI
+                            </div>
+                          </motion.div>
+                        </BackgroundOverlay>
+
+                        <BackgroundOverlay
+                          defaultBackground=""
+                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDMweHN0aWNza3djeTNwbTBpMTd4NnUyMXVkdjMzdHN1bHRkb29xMCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/Q8DQRJ7X3ps5y4TRnh/giphy.gif"
+                          className="h-32 sm:h-36 bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                          onClick={() =>
+                            handlePromptClick(
+                              "Find areas where US federal R&D spending overlaps with a surge in new patents in the past 5 years. Rank by total award amount."
+                            )
+                          }
+                        >
+                          <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.7, duration: 0.5 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="h-full flex flex-col justify-center items-center text-center group"
+                          >
+                            <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
+                              🏛️ Federal Spending & Patents
+                            </div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 group-hover:opacity-0 transition-opacity duration-300">
+                              Federal spending, patents, and R&D
+                            </div>
+                          </motion.div>
+                        </BackgroundOverlay>
+
+                        <BackgroundOverlay
+                          defaultBackground=""
+                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdHc1eGMwNGthcXZ1OGF3b3Qzd3VzdHhpdGJxaTl1cHhhOHk0cDBsMyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/xUA7b4arnbo3THfzi0/giphy.gif"
+                          className="h-32 sm:h-36 col-span-1 sm:col-span-2 lg:col-span-1 bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                          onClick={() =>
+                            handlePromptClick(
+                              "Analyze whether US climate-tech funding (DOE grants/contracts) corresponds with patent filings in renewable energy."
+                            )
+                          }
+                        >
+                          <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.8, duration: 0.5 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="h-full flex flex-col justify-center items-center text-center group"
+                          >
+                            <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
+                              🌱 Policy and impacts
+                            </div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 group-hover:opacity-0 transition-opacity duration-300">
+                              US climate-tech funding and patents in renewable
+                              energy
+                            </div>
+                          </motion.div>
+                        </BackgroundOverlay>
+
+                        <BackgroundOverlay
+                          defaultBackground=""
+                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaWs1OW95bmM4OXlrbGZid3Ftd3lxaDc2Z3djbG10ZG9taHFpMXB2cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/XUFPGrX5Zis6Y/giphy.gif"
+                          className="h-32 sm:h-36 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 p-2.5 sm:p-4 rounded-xl border border-purple-200 dark:border-purple-700 hover:border-purple-300 dark:hover:border-purple-600 transition-colors hover:from-purple-100 hover:to-indigo-100 dark:hover:from-purple-900/30 dark:hover:to-indigo-900/30"
+                          onClick={() =>
+                            handlePromptClick(
+                              "Find overlap between hypersonic missile patents and federal awards in hypersonics or advanced propulsion."
+                            )
+                          }
+                        >
+                          <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.3, duration: 0.5 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="h-full flex flex-col justify-center items-center text-center group"
+                          >
+                            <div className="text-purple-700 dark:text-purple-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
+                              💻 Defence Technology
+                            </div>
+                            <div className="text-[10px] sm:text-xs text-purple-600 dark:text-purple-400 group-hover:opacity-0 transition-opacity duration-300">
+                              Defence technology, weapons, and military
+                            </div>
+                          </motion.div>
+                        </BackgroundOverlay>
                       </div>
                     </div>
                   </div>
@@ -4262,20 +4274,14 @@ export function ChatInterface({
                                               ) {
                                                 const p = message.parts[i];
 
-                                                // Check for search tool results (web search and other tools)
+                                                // Check for search tool results (web search, patent search, and federal spending search)
                                                 if (
                                                   (p.type ===
                                                     "tool-webSearch" ||
                                                     p.type ===
-                                                      "tool-readTextFromUrl" ||
+                                                      "tool-patentsSearch" ||
                                                     p.type ===
-                                                      "tool-parsePdfFromUrl" ||
-                                                    p.type ===
-                                                      "tool-parseDocxFromUrl" ||
-                                                    p.type ===
-                                                      "tool-createChart" ||
-                                                    p.type ===
-                                                      "tool-codeExecution") &&
+                                                      "tool-USAfedSearch") &&
                                                   p.state ===
                                                     "output-available" &&
                                                   p.output
@@ -4341,19 +4347,10 @@ export function ChatInterface({
                                                                 "tool-webSearch"
                                                                   ? "web"
                                                                   : p.type ===
-                                                                    "tool-readTextFromUrl"
+                                                                    "tool-patentsSearch"
                                                                   ? "web"
                                                                   : p.type ===
-                                                                    "tool-parsePdfFromUrl"
-                                                                  ? "web"
-                                                                  : p.type ===
-                                                                    "tool-parseDocxFromUrl"
-                                                                  ? "web"
-                                                                  : p.type ===
-                                                                    "tool-createChart"
-                                                                  ? "web"
-                                                                  : p.type ===
-                                                                    "tool-codeExecution"
+                                                                    "tool-USAfedSearch"
                                                                   ? "web"
                                                                   : "web",
                                                             },
@@ -4418,133 +4415,6 @@ export function ChatInterface({
                                       // Skip individual reasoning parts as they're handled in groups
                                       case "reasoning":
                                         return null;
-
-                                      // Python Executor Tool
-                                      case "tool-codeExecution": {
-                                        const callId = part.toolCallId;
-                                        const isExpanded =
-                                          expandedTools.has(callId);
-
-                                        switch (part.state) {
-                                          case "input-streaming":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 mb-2">
-                                                  <span className="text-lg">
-                                                    🐍
-                                                  </span>
-                                                  <span className="font-medium">
-                                                    Python Executor
-                                                  </span>
-                                                  <Clock className="h-3 w-3 animate-spin" />
-                                                </div>
-                                                <div className="text-sm text-blue-600 dark:text-blue-300">
-                                                  Preparing code execution...
-                                                </div>
-                                              </div>
-                                            );
-                                          case "input-available":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 mb-2">
-                                                  <span className="text-lg">
-                                                    🐍
-                                                  </span>
-                                                  <span className="font-medium">
-                                                    Python Executor
-                                                  </span>
-                                                  <Clock className="h-3 w-3 animate-spin" />
-                                                </div>
-                                                <div className="text-sm text-blue-600 dark:text-blue-300">
-                                                  <div className="bg-blue-100 dark:bg-blue-800/30 p-2 rounded">
-                                                    <div className="flex items-center justify-between mb-2">
-                                                      <span className="font-medium">
-                                                        {part.input
-                                                          .description ||
-                                                          "Executing Python code..."}
-                                                      </span>
-                                                      <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                          toggleToolExpansion(
-                                                            callId
-                                                          )
-                                                        }
-                                                        className="h-6 w-6 p-0 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200"
-                                                      >
-                                                        {isExpanded ? (
-                                                          <ChevronUp className="h-3 w-3" />
-                                                        ) : (
-                                                          <ChevronDown className="h-3 w-3" />
-                                                        )}
-                                                      </Button>
-                                                    </div>
-                                                    {isExpanded ? (
-                                                      <pre className="font-mono text-xs whitespace-pre-wrap bg-white dark:bg-gray-800 p-2 rounded border max-h-48 overflow-y-auto">
-                                                        {part.input.code}
-                                                      </pre>
-                                                    ) : (
-                                                      <div className="font-mono text-xs text-blue-700 dark:text-blue-300 line-clamp-2">
-                                                        {
-                                                          part.input.code.split(
-                                                            "\n"
-                                                          )[0]
-                                                        }
-                                                        ...
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            );
-                                          case "output-available":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-green-700 dark:text-green-400 mb-2">
-                                                  <CheckCircle className="h-4 w-4" />
-                                                  <span className="font-medium">
-                                                    Python Execution Result
-                                                  </span>
-                                                </div>
-                                                <div className="text-sm text-green-600 dark:text-green-300">
-                                                  <div className="prose prose-sm max-w-none dark:prose-invert">
-                                                    <MemoizedMarkdown
-                                                      text={part.output}
-                                                    />
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            );
-                                          case "output-error":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-red-700 dark:text-red-400 mb-2">
-                                                  <AlertCircle className="h-4 w-4" />
-                                                  <span className="font-medium">
-                                                    Python Execution Error
-                                                  </span>
-                                                </div>
-                                                <div className="text-sm text-red-600 dark:text-red-300">
-                                                  {part.errorText}
-                                                </div>
-                                              </div>
-                                            );
-                                        }
-                                        break;
-                                      }
 
                                       // Web Search Tool
                                       case "tool-webSearch": {
@@ -4611,7 +4481,7 @@ export function ChatInterface({
                                                   <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
                                                     <CheckCircle className="h-4 w-4" />
                                                     <span className="font-medium">
-                                                      Valyu Search Results
+                                                      Web Search Results
                                                     </span>
                                                     <span className="text-xs text-blue-600 dark:text-blue-300">
                                                       ({webResults.length}{" "}
@@ -4656,28 +4526,27 @@ export function ChatInterface({
                                         break;
                                       }
 
-                                      // Chart Creation Tool
-                                      case "tool-createChart": {
+                                      // Patent Search Tool
+                                      case "tool-patentsSearch": {
                                         const callId = part.toolCallId;
                                         switch (part.state) {
                                           case "input-streaming":
                                             return (
                                               <div
                                                 key={callId}
-                                                className="mt-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded p-2 sm:p-3"
+                                                className="mt-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2 sm:p-3"
                                               >
-                                                <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 mb-2">
+                                                <div className="flex items-center gap-2 text-green-700 dark:text-green-400 mb-2">
                                                   <span className="text-lg">
-                                                    📈
+                                                    🔬
                                                   </span>
                                                   <span className="font-medium">
-                                                    Creating Chart
+                                                    Patent Search
                                                   </span>
                                                   <Clock className="h-3 w-3 animate-spin" />
                                                 </div>
-                                                <div className="text-sm text-emerald-600 dark:text-emerald-300">
-                                                  Preparing chart
-                                                  visualization...
+                                                <div className="text-sm text-green-600 dark:text-green-300">
+                                                  Preparing patent search...
                                                 </div>
                                               </div>
                                             );
@@ -4685,124 +4554,65 @@ export function ChatInterface({
                                             return (
                                               <div
                                                 key={callId}
-                                                className="mt-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded p-2 sm:p-3"
+                                                className="mt-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2 sm:p-3"
                                               >
-                                                <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 mb-2">
+                                                <div className="flex items-center gap-2 text-green-700 dark:text-green-400 mb-2">
                                                   <span className="text-lg">
-                                                    📈
+                                                    🔬
                                                   </span>
                                                   <span className="font-medium">
-                                                    Creating Chart
+                                                    Patent Search
                                                   </span>
                                                   <Clock className="h-3 w-3 animate-spin" />
                                                 </div>
-                                                <div className="text-sm text-emerald-600 dark:text-emerald-300">
-                                                  <div className="bg-emerald-100 dark:bg-emerald-800/30 p-2 rounded">
-                                                    <div className="font-mono text-xs">
-                                                      Creating {part.input.type}{" "}
-                                                      chart: &quot;
-                                                      {part.input.title}
-                                                      &quot;
-                                                      <br />
-                                                      Data Series:{" "}
-                                                      {part.input.dataSeries
-                                                        ?.length || 0}
+                                                <div className="text-sm text-green-600 dark:text-green-300">
+                                                  <div className="bg-green-100 dark:bg-green-800/30 p-2 rounded">
+                                                    <div className="text-xs">
+                                                      Searching for: &quot;
+                                                      {part.input.query}&quot;
                                                     </div>
                                                   </div>
                                                   <div className="mt-2 text-xs">
-                                                    Generating interactive
-                                                    visualization...
+                                                    Searching patent
+                                                    databases...
                                                   </div>
                                                 </div>
                                               </div>
                                             );
                                           case "output-available":
-                                            // Charts are expanded by default, collapsed only if explicitly set
-                                            const isChartExpanded =
-                                              !expandedTools.has(
-                                                `collapsed-${callId}`
-                                              );
+                                            const patentResults =
+                                              extractSearchResults(part.output);
                                             return (
                                               <div
                                                 key={callId}
-                                                className="mt-2"
+                                                className="mt-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 sm:p-4"
                                               >
-                                                {isChartExpanded ? (
-                                                  <div className="relative">
-                                                    <Button
-                                                      variant="ghost"
-                                                      size="sm"
-                                                      onClick={() =>
-                                                        toggleChartExpansion(
-                                                          callId
-                                                        )
-                                                      }
-                                                      className="absolute right-2 top-2 z-10 h-6 w-6 p-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-full shadow-sm"
+                                                <div className="flex items-center justify-between gap-3 mb-4">
+                                                  <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                                                    <CheckCircle className="h-4 w-4" />
+                                                    <span className="font-medium">
+                                                      Patent Search Results
+                                                    </span>
+                                                    <span className="text-xs text-green-600 dark:text-green-300">
+                                                      ({patentResults.length}{" "}
+                                                      results)
+                                                    </span>
+                                                  </div>
+                                                  {part.input?.query && (
+                                                    <div
+                                                      className="text-xs font-mono text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 px-3 py-1 rounded border border-green-200 dark:border-green-700 max-w-[60%] truncate"
+                                                      title={part.input.query}
                                                     >
-                                                      <ChevronUp className="h-4 w-4" />
-                                                    </Button>
-                                                    <FinancialChart
-                                                      {...part.output}
-                                                    />
-                                                  </div>
-                                                ) : (
-                                                  <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-                                                    <div className="flex items-center justify-between mb-2">
-                                                      <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                                                        <span className="text-lg">
-                                                          📈
-                                                        </span>
-                                                        <span className="font-medium">
-                                                          {part.output.title}
-                                                        </span>
-                                                      </div>
-                                                      <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                          toggleChartExpansion(
-                                                            callId
-                                                          )
-                                                        }
-                                                        className="h-6 w-6 p-0 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                                                      >
-                                                        <ChevronDown className="h-4 w-4" />
-                                                      </Button>
+                                                      {part.input.query}
                                                     </div>
-                                                    <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
-                                                      <div>
-                                                        Chart Type:{" "}
-                                                        {part.output.chartType}
-                                                      </div>
-                                                      <div>
-                                                        Data Series:{" "}
-                                                        {part.output.dataSeries
-                                                          ?.length || 0}
-                                                      </div>
-                                                      {part.output
-                                                        .description && (
-                                                        <div className="text-xs">
-                                                          {
-                                                            part.output
-                                                              .description
-                                                          }
-                                                        </div>
-                                                      )}
-                                                    </div>
-                                                    <div className="text-center mt-3">
-                                                      <button
-                                                        onClick={() =>
-                                                          toggleChartExpansion(
-                                                            callId
-                                                          )
-                                                        }
-                                                        className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 underline"
-                                                      >
-                                                        View Chart
-                                                      </button>
-                                                    </div>
-                                                  </div>
-                                                )}
+                                                  )}
+                                                </div>
+                                                <SearchResultsCarousel
+                                                  results={patentResults}
+                                                  type="web"
+                                                  toolName="patentsSearch"
+                                                  messageId={message.id}
+                                                />
                                               </div>
                                             );
                                           case "output-error":
@@ -4814,7 +4624,7 @@ export function ChatInterface({
                                                 <div className="flex items-center gap-2 text-red-700 dark:text-red-400 mb-2">
                                                   <AlertCircle className="h-4 w-4" />
                                                   <span className="font-medium">
-                                                    Chart Creation Error
+                                                    Patent Search Error
                                                   </span>
                                                 </div>
                                                 <div className="text-sm text-red-600 dark:text-red-300">
@@ -4825,44 +4635,29 @@ export function ChatInterface({
                                         }
                                         break;
                                       }
-                                      // Comprehensive Search Tool
-                                      case "tool-comprehensiveSearch": {
+
+                                      // US Federal Spending Search Tool (now orange)
+                                      case "tool-USAfedSearch": {
                                         const callId = part.toolCallId;
                                         switch (part.state) {
                                           case "input-streaming":
                                             return (
                                               <div
                                                 key={callId}
-                                                className="mt-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded p-2 sm:p-3"
+                                                className="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 sm:p-3"
                                               >
-                                                <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400 mb-2">
+                                                <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400 mb-2">
                                                   <span className="text-lg">
-                                                    🧬
+                                                    🏛️
                                                   </span>
                                                   <span className="font-medium">
-                                                    {part.type ===
-                                                      "tool-clinicalTrialsSearch" &&
-                                                      "Searching Clinical Trials"}
-                                                    {part.type ===
-                                                      "tool-getClinicalTrialDetails" &&
-                                                      "Fetching Clinical Trial Details"}
-                                                    {part.type ===
-                                                      "tool-drugInformationSearch" &&
-                                                      "Searching Drug Information"}
-                                                    {part.type ===
-                                                      "tool-biomedicalLiteratureSearch" &&
-                                                      "Searching Biomedical Literature"}
-                                                    {part.type ===
-                                                      "tool-pharmaCompanyAnalysis" &&
-                                                      "Analyzing Pharmaceutical Company"}
-                                                    {part.type ===
-                                                      "tool-comprehensiveSearch" &&
-                                                      "Comprehensive Search"}
+                                                    US Federal Spending Search
                                                   </span>
                                                   <Clock className="h-3 w-3 animate-spin" />
                                                 </div>
-                                                <div className="text-sm text-indigo-600 dark:text-indigo-300">
-                                                  Searching databases...
+                                                <div className="text-sm text-orange-600 dark:text-orange-300">
+                                                  Preparing federal spending
+                                                  search...
                                                 </div>
                                               </div>
                                             );
@@ -4870,309 +4665,79 @@ export function ChatInterface({
                                             return (
                                               <div
                                                 key={callId}
-                                                className="mt-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded p-2 sm:p-3"
+                                                className="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 sm:p-3"
                                               >
-                                                <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400 mb-2">
+                                                <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400 mb-2">
                                                   <span className="text-lg">
-                                                    🧬
+                                                    🏛️
                                                   </span>
                                                   <span className="font-medium">
-                                                    {part.type ===
-                                                      "tool-clinicalTrialsSearch" &&
-                                                      "Searching Clinical Trials"}
-                                                    {part.type ===
-                                                      "tool-getClinicalTrialDetails" &&
-                                                      "Fetching Clinical Trial Details"}
-                                                    {part.type ===
-                                                      "tool-drugInformationSearch" &&
-                                                      "Searching Drug Information"}
-                                                    {part.type ===
-                                                      "tool-biomedicalLiteratureSearch" &&
-                                                      "Searching Biomedical Literature"}
-                                                    {part.type ===
-                                                      "tool-pharmaCompanyAnalysis" &&
-                                                      "Analyzing Pharmaceutical Company"}
-                                                    {part.type ===
-                                                      "tool-comprehensiveSearch" &&
-                                                      "Comprehensive Search"}
+                                                    US Federal Spending Search
                                                   </span>
                                                   <Clock className="h-3 w-3 animate-spin" />
                                                 </div>
-                                                <div className="text-sm text-indigo-600 dark:text-indigo-300">
-                                                  <div className="bg-indigo-100 dark:bg-indigo-800/30 p-2 rounded">
-                                                    <div className="font-mono text-xs">
-                                                      {part.type ===
-                                                      "tool-getClinicalTrialDetails" ? (
-                                                        <>
-                                                          NCT ID:{" "}
-                                                          {part.input.nctId ||
-                                                            "N/A"}
-                                                        </>
-                                                      ) : (
-                                                        <>
-                                                          Query: &quot;
-                                                          {part.input.query ||
-                                                            "N/A"}
-                                                          &quot;
-                                                          {part.input
-                                                            .maxResults && (
-                                                            <>
-                                                              <br />
-                                                              Max Results:{" "}
-                                                              {
-                                                                part.input
-                                                                  .maxResults
-                                                              }
-                                                            </>
-                                                          )}
-                                                        </>
-                                                      )}
+                                                <div className="text-sm text-orange-600 dark:text-orange-300">
+                                                  <div className="bg-orange-100 dark:bg-orange-800/30 p-2 rounded">
+                                                    <div className="text-xs">
+                                                      Searching for: &quot;
+                                                      {part.input.query}&quot;
                                                     </div>
                                                   </div>
                                                   <div className="mt-2 text-xs">
-                                                    Retrieving data from
-                                                    specialized sources...
+                                                    Searching federal spending
+                                                    databases...
                                                   </div>
                                                 </div>
                                               </div>
                                             );
                                           case "output-available":
-                                            // Special handling for getClinicalTrialDetails
-                                            if (
-                                              part.type ===
-                                              "tool-getClinicalTrialDetails"
-                                            ) {
-                                              try {
-                                                const detailData = JSON.parse(
-                                                  part.output
-                                                );
-
-                                                // Convert single trial detail to array format for display
-                                                const detailResults =
-                                                  detailData.found &&
-                                                  detailData.data
-                                                    ? [
-                                                        {
-                                                          id:
-                                                            detailData.nctId ||
-                                                            detailData.data
-                                                              .nct_id,
-                                                          title:
-                                                            detailData.title ||
-                                                            detailData.data
-                                                              .brief_title ||
-                                                            detailData.data
-                                                              .official_title ||
-                                                            "Clinical Trial",
-                                                          summary:
-                                                            detailData.data
-                                                              .brief_summary ||
-                                                            "No summary available",
-                                                          source:
-                                                            "ClinicalTrials.gov",
-                                                          date:
-                                                            detailData.data
-                                                              .start_date || "",
-                                                          url:
-                                                            detailData.url ||
-                                                            "",
-                                                          fullContent:
-                                                            JSON.stringify(
-                                                              detailData.data
-                                                            ),
-                                                          dataType:
-                                                            "clinical_trials",
-                                                          nctId:
-                                                            detailData.nctId ||
-                                                            detailData.data
-                                                              .nct_id,
-                                                          status:
-                                                            detailData.data
-                                                              .overall_status,
-                                                          phase:
-                                                            detailData.data
-                                                              .phases,
-                                                          relevanceScore: 1,
-                                                        },
-                                                      ]
-                                                    : [];
-
-                                                return (
-                                                  <div
-                                                    key={callId}
-                                                    className="mt-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 sm:p-4"
-                                                  >
-                                                    <div className="flex items-center justify-between gap-3 mb-4">
-                                                      <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400">
-                                                        <CheckCircle className="h-4 w-4" />
-                                                        <span className="font-medium">
-                                                          Clinical Trial Details
-                                                        </span>
-                                                      </div>
-                                                      {detailData.found && (
-                                                        <span className="text-xs text-indigo-600 dark:text-indigo-400">
-                                                          {detailData.nctId}
-                                                        </span>
-                                                      )}
-                                                    </div>
-                                                    {part.input?.query && (
-                                                      <div className="text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-800/30 px-2 py-1 rounded mb-2">
-                                                        &quot;{part.input.query}
-                                                        &quot;
-                                                      </div>
-                                                    )}
-                                                    {detailResults.length >
-                                                    0 ? (
-                                                      <SearchResultsCarousel
-                                                        results={detailResults}
-                                                        type="web"
-                                                        toolName="getClinicalTrialDetails"
-                                                        messageId={message.id}
-                                                      />
-                                                    ) : (
-                                                      <div className="text-sm text-gray-500">
-                                                        {detailData.message ||
-                                                          "No trial found"}
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                );
-                                              } catch (e) {
-                                                console.error(
-                                                  "Failed to parse clinical trial details:",
-                                                  e
-                                                );
-                                              }
-                                            }
-
-                                            // Regular handling for other healthcare tools
-                                            const healthcareResults =
+                                            const federalResults =
                                               extractSearchResults(part.output);
                                             return (
                                               <div
                                                 key={callId}
-                                                className="mt-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 sm:p-4"
+                                                className="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3 sm:p-4"
                                               >
                                                 <div className="flex items-center justify-between gap-3 mb-4">
-                                                  <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400">
+                                                  <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
                                                     <CheckCircle className="h-4 w-4" />
                                                     <span className="font-medium">
-                                                      {part.type ===
-                                                        "tool-clinicalTrialsSearch" &&
-                                                        "Clinical Trials Results"}
-                                                      {part.type ===
-                                                        "tool-drugInformationSearch" &&
-                                                        "Drug Information Results"}
-                                                      {part.type ===
-                                                        "tool-biomedicalLiteratureSearch" &&
-                                                        "Biomedical Literature Results"}
-                                                      {part.type ===
-                                                        "tool-pharmaCompanyAnalysis" &&
-                                                        "Pharmaceutical Analysis Results"}
-                                                      {part.type ===
-                                                        "tool-comprehensiveHealthcareSearch" &&
-                                                        "Healthcare Search Results"}
+                                                      US Federal Spending
+                                                      Results
+                                                    </span>
+                                                    <span className="text-xs text-orange-600 dark:text-orange-300">
+                                                      ({federalResults.length}{" "}
+                                                      results)
                                                     </span>
                                                   </div>
-                                                  {healthcareResults.length >
-                                                    0 && (
-                                                    <div className="flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400">
-                                                      <span>
-                                                        {
-                                                          healthcareResults.length
-                                                        }{" "}
-                                                        results
-                                                      </span>
-                                                      {healthcareResults.some(
-                                                        (r: any) =>
-                                                          r.dataType ===
-                                                          "clinical_trials"
-                                                      ) && (
-                                                        <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-800/30 rounded">
-                                                          Clinical Trials
-                                                        </span>
-                                                      )}
-                                                      {healthcareResults.some(
-                                                        (r: any) =>
-                                                          r.dataType ===
-                                                          "drug_labels"
-                                                      ) && (
-                                                        <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-800/30 rounded">
-                                                          Drug Labels
-                                                        </span>
-                                                      )}
-                                                      {healthcareResults.some(
-                                                        (r: any) =>
-                                                          r.dataType ===
-                                                          "research_papers"
-                                                      ) && (
-                                                        <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-800/30 rounded">
-                                                          Research Papers
-                                                        </span>
-                                                      )}
+                                                  {part.input?.query && (
+                                                    <div
+                                                      className="text-xs font-mono text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded border border-orange-200 dark:border-orange-700 max-w-[60%] truncate"
+                                                      title={part.input.query}
+                                                    >
+                                                      {part.input.query}
                                                     </div>
                                                   )}
                                                 </div>
-                                                {part.input?.query && (
-                                                  <div className="text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-800/30 px-2 py-1 rounded mb-2">
-                                                    &quot;{part.input.query}
-                                                    &quot;
-                                                  </div>
-                                                )}
                                                 <SearchResultsCarousel
-                                                  results={healthcareResults}
+                                                  results={federalResults}
                                                   type="web"
-                                                  toolName={
-                                                    part.type ===
-                                                    "tool-clinicalTrialsSearch"
-                                                      ? "clinicalTrialsSearch"
-                                                      : part.type ===
-                                                        "tool-drugInformationSearch"
-                                                      ? "drugInformationSearch"
-                                                      : part.type ===
-                                                        "tool-biomedicalLiteratureSearch"
-                                                      ? "biomedicalLiteratureSearch"
-                                                      : part.type ===
-                                                        "tool-pharmaCompanyAnalysis"
-                                                      ? "pharmaCompanyAnalysis"
-                                                      : "comprehensiveHealthcareSearch"
-                                                  }
+                                                  toolName="USAfedSearch"
                                                   messageId={message.id}
                                                 />
                                               </div>
                                             );
-                                          case "output-streaming":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400 mb-2">
-                                                  <span className="text-lg">
-                                                    🧬
-                                                  </span>
-                                                  <span className="font-medium">
-                                                    Healthcare Search
-                                                  </span>
-                                                  <Clock className="h-3 w-3 animate-spin" />
-                                                </div>
-                                                <div className="text-sm text-indigo-600 dark:text-indigo-300">
-                                                  Retrieving results...
-                                                </div>
-                                              </div>
-                                            );
-                                          case "error":
+                                          case "output-error":
                                             return (
                                               <div
                                                 key={callId}
                                                 className="mt-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 sm:p-3"
                                               >
                                                 <div className="flex items-center gap-2 text-red-700 dark:text-red-400 mb-2">
-                                                  <span className="text-lg">
-                                                    ❌
-                                                  </span>
+                                                  <AlertCircle className="h-4 w-4" />
                                                   <span className="font-medium">
-                                                    Healthcare Search Error
+                                                    US Federal Spending Search
+                                                    Error
                                                   </span>
                                                 </div>
                                                 <div className="text-sm text-red-600 dark:text-red-300">
