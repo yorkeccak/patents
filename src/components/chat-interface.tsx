@@ -2433,18 +2433,21 @@ export function ChatInterface({
             user?.id || "anonymous"
           );
           console.log("[prepareSendMessagesRequest] fastMode =", fastMode);
-          let enrichedMessages = messages;
+
+          // Work on a cloned copy to avoid mutating hook state
+          let enrichedMessages = [...messages];
+
           if (libraryContextRef.current.length > 0) {
             const pendingContext = libraryContextRef.current;
             lastSentContextRef.current = pendingContext;
             libraryContextRef.current = [];
 
-            const lastUserIndex = [...messages]
+            const lastUserIndex = enrichedMessages
               .map((msg) => msg.role)
               .lastIndexOf("user");
 
             if (lastUserIndex !== -1) {
-              enrichedMessages = messages.map((message, index) => {
+              enrichedMessages = enrichedMessages.map((message, index) => {
                 if (index !== lastUserIndex) return message;
 
                 const originalText = (() => {
@@ -2635,9 +2638,29 @@ export function ChatInterface({
   useEffect(() => {
     const prevIds = messageIdsRef.current;
     const currentIds = messages.map((msg) => msg.id);
+
+    // Bail early if message IDs haven't changed
+    const idsChanged =
+      prevIds.length !== currentIds.length ||
+      currentIds.some((id, idx) => id !== prevIds[idx]);
+
+    if (!idsChanged) {
+      return;
+    }
+
     const newUserMessage = [...messages]
       .reverse()
       .find((msg) => !prevIds.includes(msg.id) && msg.role === "user");
+
+    // Skip update unless there's pending context data to apply
+    const hasPendingContext =
+      newUserMessage && lastSentContextRef.current.length > 0;
+
+    if (!hasPendingContext && idsChanged) {
+      // Just update the ref if IDs changed but no context to apply
+      messageIdsRef.current = currentIds;
+      return;
+    }
 
     setContextResourceMap((prev) => {
       const next: Record<string, SavedItem[]> = {};
@@ -2647,7 +2670,7 @@ export function ChatInterface({
         }
       });
 
-      if (newUserMessage && lastSentContextRef.current.length > 0) {
+      if (hasPendingContext) {
         next[newUserMessage.id] = [...lastSentContextRef.current];
       }
 
@@ -2664,7 +2687,7 @@ export function ChatInterface({
       return next;
     });
 
-    if (newUserMessage && lastSentContextRef.current.length > 0) {
+    if (hasPendingContext) {
       lastSentContextRef.current = [];
     }
 

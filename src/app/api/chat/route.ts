@@ -326,7 +326,7 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model: selectedModel as any,
-      messages: messages as any,
+      messages: convertToModelMessages(messages),
       tools: financeTools,
       toolChoice: "auto",
       experimental_context: {
@@ -684,7 +684,7 @@ async function saveMessageToSession(
       JSON.stringify(message, null, 2)
     );
 
-    // Handle different message formats
+    // Handle different message formats - save content as the parts array
     let content = [];
 
     if (message.parts) {
@@ -705,10 +705,32 @@ async function saveMessageToSession(
       console.log("[saveMessageToSession] No recognized content field found");
     }
 
+    // Extract contextResources and lift into token_usage
+    const contextResources = message.contextResources || null;
+    let tokenUsagePayload = message.token_usage || message.tokenUsage || null;
+
+    // When contextResources is present, lift it into token_usage.contextResources
+    // while preserving any existing token_usage data
+    if (contextResources) {
+      if (
+        tokenUsagePayload &&
+        typeof tokenUsagePayload === "object" &&
+        !Array.isArray(tokenUsagePayload)
+      ) {
+        tokenUsagePayload = {
+          ...tokenUsagePayload,
+          contextResources,
+        };
+      } else {
+        tokenUsagePayload = { contextResources };
+      }
+    }
+
     const insertData = {
       session_id: sessionId,
       role: message.role,
-      content: content,
+      content: content, // Save as parts array
+      token_usage: tokenUsagePayload,
       tool_calls: message.tool_calls || message.toolCalls || null,
     };
 

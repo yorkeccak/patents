@@ -56,10 +56,11 @@ export async function GET(
     JSON.stringify({
       session,
       messages: messages.map((msg) => {
-        // Handle both old format (content as parts) and new format (content with parts and contextResources)
+        // Handle both old format (content as parts) and new format
         let parts = msg.content;
         let contextResources = null;
 
+        // Support legacy { parts, contextResources } object shape
         if (
           msg.content &&
           typeof msg.content === "object" &&
@@ -81,8 +82,8 @@ export async function GET(
         return {
           id: msg.id,
           role: msg.role,
-          parts: parts,
-          contextResources: contextResources,
+          parts: parts, // Return plain parts array
+          contextResources: contextResources, // Return resources alongside
           toolCalls: msg.tool_calls,
           createdAt: msg.created_at,
         };
