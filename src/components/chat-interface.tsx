@@ -3845,11 +3845,7 @@ export function ChatInterface({
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onSelect={() => {
-                                if (user) {
-                                  openLibraryCard();
-                                } else {
-                                  setShowAuthModal(true);
-                                }
+                                openLibraryCard();
                               }}
                             >
                               <span className="inline-flex items-center">
@@ -5135,11 +5131,7 @@ export function ChatInterface({
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onSelect={() => {
-                              if (user) {
-                                openLibraryCard();
-                              } else {
-                                setShowAuthModal(true);
-                              }
+                              openLibraryCard();
                             }}
                           >
                             <span className="inline-flex items-center">

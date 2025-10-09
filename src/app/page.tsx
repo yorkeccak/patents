@@ -446,7 +446,7 @@ function HomeContent() {
         <OllamaStatusIndicator hasMessages={hasMessages} />
         <ShareButton />
 
-        {user ? (
+        {user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="gap-2 h-8">
@@ -695,10 +695,6 @@ function HomeContent() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        ) : (
-          <Button onClick={() => setShowAuthModal(true)} size="sm">
-            Sign In
-          </Button>
         )}
       </div>
 
