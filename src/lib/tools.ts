@@ -1119,6 +1119,7 @@ ${escapeModuleTag(execution.result || "(No output produced)")}
         .optional()
         .default(10)
         .describe("Maximum number of results to return"),
+      // responseLength: "short",
     }),
     execute: async ({ query, maxResults }, options) => {
       const userId = (options as any)?.experimental_context?.userId;
