@@ -380,6 +380,26 @@ export async function POST(req: Request) {
       selectedModel
     );
     console.log(`[Chat API] Model info:`, modelInfo);
+    console.log(
+      `[Chat API] Messages before conversion:`,
+      JSON.stringify(messages, null, 2)
+    );
+
+    // Ensure messages is an array and not undefined
+    if (!Array.isArray(messages)) {
+      console.error(
+        "[Chat API] Messages is not an array:",
+        typeof messages,
+        messages
+      );
+      return new Response(
+        JSON.stringify({ error: "Invalid messages format" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
 
     const result = streamText({
       model: selectedModel as any,
@@ -701,16 +721,41 @@ async function saveMessageToSession(
     }
 
     // Ensure content is properly formatted for database storage
-    const contentData = {
-      parts: content,
-      contextResources: message.contextResources || null,
-    };
+    const contentData = content;
+    const contextResources = message.contextResources || null;
+
+    let tokenUsagePayload =
+      typeof (message as any).token_usage !== "undefined"
+        ? (message as any).token_usage
+        : typeof (message as any).tokenUsage !== "undefined"
+        ? (message as any).tokenUsage
+        : undefined;
+
+    if (typeof tokenUsagePayload === "undefined") {
+      tokenUsagePayload = null;
+    }
+
+    if (contextResources) {
+      if (
+        tokenUsagePayload &&
+        typeof tokenUsagePayload === "object" &&
+        !Array.isArray(tokenUsagePayload)
+      ) {
+        tokenUsagePayload = {
+          ...tokenUsagePayload,
+          contextResources,
+        };
+      } else {
+        tokenUsagePayload = { contextResources };
+      }
+    }
 
     const insertData = {
       id: crypto.randomUUID(),
       session_id: sessionId,
       role: message.role,
       content: contentData,
+      token_usage: tokenUsagePayload ?? null,
       tool_calls: message.tool_calls || message.toolCalls || null,
     };
 

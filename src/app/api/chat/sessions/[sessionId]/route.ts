@@ -69,6 +69,15 @@ export async function GET(
           contextResources = msg.content.contextResources;
         }
 
+        // Also check token_usage.contextResources when legacy shape is absent
+        if (
+          !contextResources &&
+          msg.token_usage &&
+          msg.token_usage.contextResources
+        ) {
+          contextResources = msg.token_usage.contextResources;
+        }
+
         return {
           id: msg.id,
           role: msg.role,
