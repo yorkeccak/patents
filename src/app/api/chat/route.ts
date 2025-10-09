@@ -1,5 +1,5 @@
 import { streamText, convertToModelMessages } from "ai";
-import { patentTools } from "@/lib/tools";
+import { financeTools } from "@/lib/tools";
 import { HealthcareUIMessage } from "@/lib/types";
 import { openai, createOpenAI } from "@ai-sdk/openai";
 import { createOllama, ollama } from "ollama-ai-provider-v2";
@@ -14,24 +14,11 @@ export const maxDuration = 180;
 
 export async function POST(req: Request) {
   try {
-    let requestData;
-    try {
-      requestData = await req.json();
-    } catch (jsonError) {
-      console.error("[Chat API] JSON parsing error:", jsonError);
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON in request body" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-
     const {
       messages,
       sessionId,
-    }: { messages: HealthcareUIMessage[]; sessionId?: string } = requestData;
+    }: { messages: HealthcareUIMessage[]; sessionId?: string } =
+      await req.json();
     console.log(
       "[Chat API] Incoming messages:",
       JSON.stringify(messages, null, 2)
@@ -174,59 +161,92 @@ export async function POST(req: Request) {
     let modelInfo: string;
 
     if (isDevelopment) {
-      // Development mode: Use OpenAI by default, only use Ollama when explicitly requested
-      const userPreferredModel = req.headers.get("x-ollama-model");
+      // Development mode: Try to use Ollama first, fallback to OpenAI
+      try {
+        // Try to connect to Ollama first
+        const ollamaResponse = await fetch(`${ollamaBaseUrl}/api/tags`, {
+          method: "GET",
+          signal: AbortSignal.timeout(3000), // 3 second timeout
+        });
 
-      if (userPreferredModel) {
-        // User explicitly wants to use Ollama - check if it's available
-        try {
-          const ollamaResponse = await fetch(`${ollamaBaseUrl}/api/tags`, {
-            method: "GET",
-            signal: AbortSignal.timeout(3000), // 3 second timeout
-          });
+        if (ollamaResponse.ok) {
+          const data = await ollamaResponse.json();
+          const models = data.models || [];
 
-          if (ollamaResponse.ok) {
-            const data = await ollamaResponse.json();
-            const models = data.models || [];
+          if (models.length > 0) {
+            // Prioritize Llama 3.1 which is explicitly listed as supporting tools
+            const preferredModels = [
+              "llama3.1",
+              "gemma3:4b",
+              "gemma3",
+              "llama3.2",
+              "llama3",
+              "qwen2.5",
+              "codestral",
+              "deepseek-r1",
+            ];
+            let selectedModelName = models[0].name;
 
-            if (models.some((m: any) => m.name === userPreferredModel)) {
-              console.log(
-                `[Chat API] Using requested Ollama model: ${userPreferredModel}`
-              );
+            // Check if user has a specific model preference from the request
+            const userPreferredModel = req.headers.get("x-ollama-model");
 
-              const ollamaAsOpenAI = createOpenAI({
-                baseURL: `${ollamaBaseUrl}/v1`,
-                apiKey: "ollama",
-              });
-
-              selectedModel = ollamaAsOpenAI.chat(userPreferredModel);
-              modelInfo = `Ollama (${userPreferredModel}) - Development Mode`;
+            // Try to find a preferred model
+            if (
+              userPreferredModel &&
+              models.some((m: any) => m.name === userPreferredModel)
+            ) {
+              selectedModelName = userPreferredModel;
             } else {
-              throw new Error(
-                `Requested model ${userPreferredModel} not found in Ollama`
-              );
+              for (const preferred of preferredModels) {
+                if (models.some((m: any) => m.name.includes(preferred))) {
+                  selectedModelName = models.find((m: any) =>
+                    m.name.includes(preferred)
+                  )?.name;
+                  break;
+                }
+              }
             }
-          } else {
-            throw new Error(
-              `Ollama API responded with status ${ollamaResponse.status}`
+
+            // Debug: Log the exact configuration
+            console.log(
+              `[Chat API] Attempting to configure Ollama with baseURL: ${ollamaBaseUrl}/v1`
             );
+            console.log(`[Chat API] Selected model name: ${selectedModelName}`);
+
+            // Use OpenAI provider and explicitly create a chat model (not responses model)
+            const ollamaAsOpenAI = createOpenAI({
+              baseURL: `${ollamaBaseUrl}/v1`, // This should hit /v1/chat/completions
+              apiKey: "ollama", // Dummy API key for Ollama
+            });
+
+            // Create a chat model explicitly
+            selectedModel = ollamaAsOpenAI.chat(selectedModelName);
+            modelInfo = `Ollama (${selectedModelName}) - Development Mode`;
+            console.log(
+              `[Chat API] Created model with provider:`,
+              typeof selectedModel
+            );
+            console.log(
+              `[Chat API] Model baseURL should be: ${ollamaBaseUrl}/v1`
+            );
+          } else {
+            throw new Error("No models available in Ollama");
           }
-        } catch (error) {
-          console.log(
-            "[Chat API] Requested Ollama model not available, falling back to OpenAI:",
-            error
+        } else {
+          throw new Error(
+            `Ollama API responded with status ${ollamaResponse.status}`
           );
-          selectedModel = hasOpenAIKey ? openai("gpt-5") : "openai/gpt-5";
-          modelInfo = hasOpenAIKey
-            ? "OpenAI (gpt-5) - Development Mode (Ollama Fallback)"
-            : 'Vercel AI Gateway ("gpt-5") - Development Mode (Ollama Fallback)';
         }
-      } else {
-        // Default to OpenAI in development mode
+      } catch (error) {
+        console.log(
+          "[Chat API] Ollama not available, falling back to OpenAI:",
+          error
+        );
+        // Fallback to OpenAI in development mode
         selectedModel = hasOpenAIKey ? openai("gpt-5") : "openai/gpt-5";
         modelInfo = hasOpenAIKey
-          ? "OpenAI (gpt-5) - Development Mode Default"
-          : 'Vercel AI Gateway ("gpt-5") - Development Mode Default';
+          ? "OpenAI (gpt-5) - Development Mode Fallback"
+          : 'Vercel AI Gateway ("gpt-5") - Development Mode Fallback';
       }
     } else {
       // Production mode: Use Polar-wrapped OpenAI ONLY for pay-per-use users
@@ -283,30 +303,12 @@ export async function POST(req: Request) {
         "[Chat API] Attempting to save user message to session:",
         sessionId
       );
-      console.log("[Chat API] User ID:", user.id);
       console.log("[Chat API] Message to save:", messages[messages.length - 1]);
-      console.log("[Chat API] Supabase client created:", !!supabase);
-      console.log("[Chat API] Message format check:", {
-        hasRole: !!messages[messages.length - 1]?.role,
-        hasContent: !!(messages[messages.length - 1] as any)?.content,
-        hasParts: !!messages[messages.length - 1]?.parts,
-        messageKeys: Object.keys(messages[messages.length - 1] || {}),
-      });
-
-      try {
-        await saveMessageToSession(
-          supabase,
-          sessionId,
-          messages[messages.length - 1]
-        );
-        console.log("[Chat API] Message save attempt completed");
-      } catch (error) {
-        console.error("[Chat API] Error during message save:", error);
-        console.error(
-          "[Chat API] Error stack:",
-          error instanceof Error ? error.stack : "No stack trace"
-        );
-      }
+      await saveMessageToSession(
+        supabase,
+        sessionId,
+        messages[messages.length - 1]
+      );
     } else {
       console.log(
         "[Chat API] Not saving message - user:",
@@ -314,12 +316,6 @@ export async function POST(req: Request) {
         "sessionId:",
         sessionId
       );
-      if (!user) {
-        console.log("[Chat API] No user found for message saving");
-      }
-      if (!sessionId) {
-        console.log("[Chat API] No sessionId found for message saving");
-      }
     }
 
     console.log(
@@ -327,31 +323,11 @@ export async function POST(req: Request) {
       selectedModel
     );
     console.log(`[Chat API] Model info:`, modelInfo);
-    console.log(
-      `[Chat API] Messages before conversion:`,
-      JSON.stringify(messages, null, 2)
-    );
-
-    // Ensure messages is an array and not undefined
-    if (!Array.isArray(messages)) {
-      console.error(
-        "[Chat API] Messages is not an array:",
-        typeof messages,
-        messages
-      );
-      return new Response(
-        JSON.stringify({ error: "Invalid messages format" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
 
     const result = streamText({
       model: selectedModel as any,
-      messages: convertToModelMessages(messages),
-      tools: patentTools,
+      messages: messages as any,
+      tools: financeTools,
       toolChoice: "auto",
       experimental_context: {
         userId: user?.id,
@@ -366,10 +342,10 @@ export async function POST(req: Request) {
           include: ["reasoning.encrypted_content"],
         },
       },
-      system: `You are a helpful assistant with access to comprehensive tools for Python code execution, patents search, web search, US federal spending data, and data visualization.
+      system: `You are a helpful assistant with access to comprehensive tools for Python code execution, financial data, web search, academic research, and data visualization.
       
       CRITICAL CITATION INSTRUCTIONS:
-      When you use ANY search tool (patents, web, or US federal spending search) and reference information from the results in your response:
+      When you use ANY search tool (financial, web, or Wiley academic search) and reference information from the results in your response:
       
       1. **Citation Format**: Use square brackets [1], [2], [3], etc.
       2. **Citation Placement**: Place citations at the END of each sentence or paragraph where you reference the information
@@ -388,72 +364,128 @@ export async function POST(req: Request) {
       
       You can:
          
-         - Execute Python code for calculations, data analysis, and mathematical computations using the codeExecution tool (runs in a secure Daytona Sandbox)
+         - Execute Python code for financial modeling, complex calculations, data analysis, and mathematical computations using the codeExecution tool (runs in a secure Daytona Sandbox)
          - The Python environment can install packages via pip at runtime inside the sandbox (e.g., numpy, pandas, scikit-learn)
          - Visualization libraries (matplotlib, seaborn, plotly) may work inside Daytona. However, by default, prefer the built-in chart creation tool for standard time series and comparisons. Use Daytona for advanced or custom visualizations only when necessary.
-         - Search for patents and intellectual property using the patentsSearch tool (authoritative patent data, technical disclosures, innovation tracking)
-         - Search US federal spending data, contracts, and grants using the USAfedSearch tool (government spending, contracts, grant information)
-         - Search the web for general information using the webSearch tool (any topic with relevance scoring and cost control)
-         - Create interactive charts and visualizations using the createChart tool (line charts, bar charts, area charts with multiple data series)
+         - Search for real-time financial data using the financial search tool (market data, earnings reports, SEC filings, financial news, regulatory updates)  
+         - Search academic finance literature using the Wiley search tool (peer-reviewed papers, academic journals, textbooks, and scholarly research)
+         - Search the web for general information using the web search tool (any topic with relevance scoring and cost control)
+         - Create interactive charts and visualizations using the chart creation tool (line charts, bar charts, area charts with multiple data series)
 
       **CRITICAL NOTE**: You must only make max 5 parallel tool calls at a time.
 
       **CRITICAL INSTRUCTIONS**: Your reports must be incredibly thorough and detailed, explore everything that is relevant to the user's query that will help to provide
-      the perfect response that is of a level expected of an elite level professional analyst or researcher.
+      the perfect response that is of a level expected of a elite level professional financial analyst for the leading financial research firm in the world.
       
-      Always use the appropriate tools when users ask for calculations, Python code execution, patents information, web queries, or data visualization.
-      Choose the codeExecution tool for any mathematical calculations, data analysis, statistical computations, or when users need to run Python code.
+      For financial data searches, you can access:
+      • Real-time stock prices, crypto rates, and forex data
+      • Quarterly and annual earnings reports
+      • SEC filings (10-K, 10-Q, 8-K documents)  
+      • Financial news from Bloomberg, Reuters, WSJ
+      • Regulatory updates from SEC, Federal Reserve
+      • Market intelligence and insider trading data
       
-      CRITICAL: WHEN TO USE codeExecution TOOL:
-      - ALWAYS use codeExecution when the user asks you to "calculate", "compute", "use Python", or "show Python code"
-      - NEVER just display Python code as text - you MUST execute it using the codeExecution tool
-      - If the user asks for calculations with Python, USE THE TOOL, don't just show code
-      - Mathematical formulas should be explained with LaTeX, but calculations MUST use codeExecution
+      For Wiley academic searches, you can access:
+      • Peer-reviewed finance and economics journals
+      • Academic textbooks and scholarly publications
+      • Quantitative finance research papers
+      • Advanced financial modeling methodologies
+      • Academic studies on options pricing, derivatives, risk management
+      • Theoretical finance concepts and mathematical frameworks
       
-      CRITICAL PYTHON CODE REQUIREMENTS:
-      1. ALWAYS include print() statements - Python code without print() produces no visible output
-      2. Use descriptive labels and proper formatting in your print statements
-      3. Include units, currency symbols, percentages where appropriate
-      4. Show step-by-step calculations for complex problems
-      5. Use f-string formatting for professional output
-      6. Always calculate intermediate values before printing final results
-       7. Available libraries: You may install and use packages in the Daytona sandbox (e.g., numpy, pandas, scikit-learn). Prefer the chart creation tool for visuals unless an advanced/custom visualization is required.
-       8. Visualization guidance: Prefer the chart creation tool for most charts. Use Daytona-rendered plots only for complex, bespoke visualizations that the chart tool cannot represent.
-      
-       REQUIRED: Every Python script must end with print() statements that show the calculated results with proper labels, units, and formatting. Never just write variable names or expressions without print() - they will not display anything to the user.
-       If generating advanced charts with Daytona (e.g., matplotlib), ensure the code renders the figure (e.g., plt.show()) so artifacts can be captured.
-      
-      ERROR RECOVERY: If any tool call fails due to validation errors, you will receive an error message explaining what went wrong. When this happens:
-      1. Read the error message carefully to understand what fields are missing or incorrect
-      2. Correct the tool call by providing ALL required fields with proper values
-      3. For createChart errors, ensure you provide: title, type, xAxisLabel, yAxisLabel, and dataSeries
-      4. For codeExecution tool errors, ensure your code includes proper print() statements
-      5. Try the corrected tool call immediately - don't ask the user for clarification
-      6. If multiple fields are missing, fix ALL of them in your retry attempt
-      
-               When explaining mathematical concepts, formulas, or financial calculations, ALWAYS use LaTeX notation for clear mathematical expressions:
-      
-      CRITICAL: ALWAYS wrap ALL mathematical expressions in <math>...</math> tags:
-      - For inline math: <math>FV = P(1 + r)^t</math>
-      - For fractions: <math>\frac{r}{n} = \frac{0.07}{12}</math>
-      - For exponents: <math>(1 + r)^{nt}</math>
-      - For complex formulas: <math>FV = P \times \left(1 + \frac{r}{n}\right)^{nt}</math>
-      
-      NEVER write LaTeX code directly in text like \frac{r}{n} or \times - it must be inside <math> tags.
-      NEVER use $ or $$ delimiters - only use <math>...</math> tags.
-      This makes formulas much more readable and professional.
-      Choose the patentsSearch tool for patent data, technical disclosures, and intellectual property information.
-      Choose the USAfedSearch tool for US federal spending data, government contracts, grants, and funding information.
-      Choose the webSearch tool for general topics, current events, research, and non-patent/non-government information.
-      Choose the createChart tool when users want to visualize data, compare metrics, or see trends over time.
+               For web searches, you can find information on:
+         • Current events and news from any topic
+         • Research topics with high relevance scoring
+         • Educational content and explanations
+         • Technology trends and developments
+         • General knowledge across all domains
+         
+         For data visualization, you can create charts when users want to:
+         • Compare multiple stocks, cryptocurrencies, or financial metrics
+         • Visualize historical trends over time (earnings, revenue, stock prices)
+         • Display portfolio performance or asset allocation
+         • Show relationships between different data series
+         • Present financial data in an easy-to-understand visual format
 
-      When users ask for charts or data visualization, or when you have time series data:
-      1. First gather the necessary data (using patents search, web search, or US federal spending search if needed)
-      2. Then create an appropriate chart with that data (always visualize time series data)
-      3. Ensure the chart has a clear title, proper axis labels, and meaningful data series names
-      4. Colors are automatically assigned for optimal visual distinction
+         Whenever you have time series data for the user (such as stock prices, historical financial metrics, or any data with values over time), always visualize it using the chart creation tool. Use a line chart by default for time series data, unless another chart type is more appropriate for the context. If you retrieve or generate time series data, automatically create a chart to help the user understand trends and patterns.
+
+         CRITICAL: When using the createChart tool, you MUST format the dataSeries exactly like this:
+         dataSeries: [
+           {
+             name: "Apple (AAPL)",
+             data: [
+               {x: "2024-01-01", y: 150.25},
+               {x: "2024-02-01", y: 155.80},
+               {x: "2024-03-01", y: 162.45}
+             ]
+           }
+         ]
+         
+         Each data point requires an x field (date/label) and y field (numeric value). Do NOT use other formats like "datasets" or "labels" - only use the dataSeries format shown above.
+
+         When creating charts:
+         • Use line charts for time series data (stock prices, trends over time)
+         • Use bar charts for comparisons between categories (quarterly earnings, different stocks)
+         • Use area charts for cumulative data or when showing composition
+         • Always provide meaningful titles and axis labels
+         • Support multiple data series when comparing related metrics
+         • Colors are automatically assigned - focus on data structure and meaningful labels
+
+               Always use the appropriate tools when users ask for calculations, Python code execution, financial information, web queries, or data visualization.
+         Choose the codeExecution tool for any mathematical calculations, financial modeling, data analysis, statistical computations, or when users need to run Python code.
+         
+         CRITICAL: WHEN TO USE codeExecution TOOL:
+         - ALWAYS use codeExecution when the user asks you to "calculate", "compute", "use Python", or "show Python code"
+         - NEVER just display Python code as text - you MUST execute it using the codeExecution tool
+         - If the user asks for calculations with Python, USE THE TOOL, don't just show code
+         - Mathematical formulas should be explained with LaTeX, but calculations MUST use codeExecution
+         
+         CRITICAL PYTHON CODE REQUIREMENTS:
+         1. ALWAYS include print() statements - Python code without print() produces no visible output
+         2. Use descriptive labels and proper formatting in your print statements
+         3. Include units, currency symbols, percentages where appropriate
+         4. Show step-by-step calculations for complex problems
+         5. Use f-string formatting for professional output
+         6. Always calculate intermediate values before printing final results
+          7. Available libraries: You may install and use packages in the Daytona sandbox (e.g., numpy, pandas, scikit-learn). Prefer the chart creation tool for visuals unless an advanced/custom visualization is required.
+          8. Visualization guidance: Prefer the chart creation tool for most charts. Use Daytona-rendered plots only for complex, bespoke visualizations that the chart tool cannot represent.
+         
+          REQUIRED: Every Python script must end with print() statements that show the calculated results with proper labels, units, and formatting. Never just write variable names or expressions without print() - they will not display anything to the user.
+          If generating advanced charts with Daytona (e.g., matplotlib), ensure the code renders the figure (e.g., plt.show()) so artifacts can be captured.
+         
+         ERROR RECOVERY: If any tool call fails due to validation errors, you will receive an error message explaining what went wrong. When this happens:
+         1. Read the error message carefully to understand what fields are missing or incorrect
+         2. Correct the tool call by providing ALL required fields with proper values
+         3. For createChart errors, ensure you provide: title, type, xAxisLabel, yAxisLabel, and dataSeries
+         4. For codeExecution tool errors, ensure your code includes proper print() statements
+         5. Try the corrected tool call immediately - don't ask the user for clarification
+         6. If multiple fields are missing, fix ALL of them in your retry attempt
+         
+                  When explaining mathematical concepts, formulas, or financial calculations, ALWAYS use LaTeX notation for clear mathematical expressions:
+         
+         CRITICAL: ALWAYS wrap ALL mathematical expressions in <math>...</math> tags:
+         - For inline math: <math>FV = P(1 + r)^t</math>
+         - For fractions: <math>\frac{r}{n} = \frac{0.07}{12}</math>
+         - For exponents: <math>(1 + r)^{nt}</math>
+         - For complex formulas: <math>FV = P \times \left(1 + \frac{r}{n}\right)^{nt}</math>
+         
+         NEVER write LaTeX code directly in text like \frac{r}{n} or \times - it must be inside <math> tags.
+         NEVER use $ or $$ delimiters - only use <math>...</math> tags.
+         This makes financial formulas much more readable and professional.
+         Choose the financial search tool specifically for financial markets, companies, and economic data.
+         Choose the Wiley search tool for academic finance research, peer-reviewed studies, theoretical concepts, advanced quantitative methods, options pricing models, academic textbooks, and scholarly papers.
+         Choose the web search tool for general topics, current events, research, and non-financial information.
+         Choose the chart creation tool when users want to visualize data, compare metrics, or see trends over time.
+
+         When users ask for charts or data visualization, or when you have time series data:
+         1. First gather the necessary data (using financial search or web search if needed)
+         2. Then create an appropriate chart with that data (always visualize time series data)
+         3. Ensure the chart has a clear title, proper axis labels, and meaningful data series names
+         4. Colors are automatically assigned for optimal visual distinction
 
       Important: If you use the chart creation tool to plot a chart, do NOT add a link to the chart in your response. The chart will be rendered automatically for the user. Simply explain the chart and its insights, but do not include any hyperlinks or references to a chart link.
+
+      When making multiple tool calls in parallel to retrieve time series data (for example, comparing several stocks or metrics), always specify the same time periods and date ranges for each tool call. This ensures the resulting data is directly comparable and can be visualized accurately on the same chart. If the user does not specify a date range, choose a reasonable default (such as the past year) and use it consistently across all tool calls for time series data.
 
       Provide clear explanations and context for all information. Offer practical advice when relevant.
       Be encouraging and supportive while helping users find accurate, up-to-date information.
@@ -466,7 +498,7 @@ export async function POST(req: Request) {
       - Always continue until you have completed all required tool calls and provided a summary or visualization if appropriate.
       - NEVER just show Python code as text - if the user wants calculations or Python code, you MUST use the codeExecution tool to run it
       - When users say "calculate", "compute", or mention Python code, this is a COMMAND to use the codeExecution tool, not a request to see code
-      - NEVER suggest using Python to fetch data from the internet or APIs. All data retrieval must be done via the patentsSearch, USAfedSearch, or webSearch tools.
+      - NEVER suggest using Python to fetch data from the internet or APIs. All data retrieval must be done via the financialSearch or webSearch tools.
       - Remember: The Python environment runs in the cloud with NumPy, pandas, and scikit-learn available, but NO visualization libraries.
       
       CRITICAL WORKFLOW ORDER:
@@ -488,19 +520,19 @@ export async function POST(req: Request) {
          - Use headers (##, ###) to organize sections clearly
          - Use blockquotes (>) for key insights or summaries
 
-      2. **Tables for Data:**
-         - Present comparative data in markdown tables
+      2. **Tables for Financial Data:**
+         - Present earnings, revenue, cash flow, and balance sheet data in markdown tables
          - Format numbers with proper comma separators (e.g., $1,234,567)
-         - Include percentage changes and comparisons where relevant
+         - Include percentage changes and comparisons
          - Example:
-         | Metric | Value 1 | Value 2 | Change (%) |
-         |--------|---------|---------|------------|
-         | Patents Filed | 1,200 | 2,340 | +95.0% |
-         | Contracts | 450 | 680 | +51.1% |
+         | Metric | 2020 | 2021 | Change (%) |
+         |--------|------|------|------------|
+         | Revenue | $41.9B | $81.3B | +94.0% |
+         | EPS | $2.22 | $6.45 | +190.5% |
 
       3. **Mathematical Formulas:**
          - Always use <math> tags for any mathematical expressions
-         - Present calculations clearly with proper notation
+         - Present financial calculations clearly with proper notation
 
       4. **Data Organization:**
          - Group related information together
@@ -530,7 +562,7 @@ export async function POST(req: Request) {
            c) You're showing an alternative approach
          - Reference the executed results instead of repeating the code
 
-      Remember: The goal is to present ALL retrieved data and facts in the most professional, readable, and visually appealing format possible. Think of it as creating a professional research report or analyst presentation.
+      Remember: The goal is to present ALL retrieved data and facts in the most professional, readable, and visually appealing format possible. Think of it as creating a professional financial report or analyst presentation.
       
       8. **Citation Requirements:**
          - ALWAYS cite sources when using information from search results
@@ -540,9 +572,9 @@ export async function POST(req: Request) {
          - Each unique search result gets ONE citation number used consistently
          - Citations are MANDATORY for:
            • Specific numbers, statistics, percentages
-           • Patent data and technical specifications
+           • Company financials and metrics  
            • Quotes or paraphrased statements
-           • Government spending data and contract details
+           • Market data and trends
            • Any factual claims from search results
       ---
       `,
@@ -648,23 +680,9 @@ async function saveMessageToSession(
 ) {
   try {
     console.log(
-      "[saveMessageToSession] Starting save process for sessionId:",
-      sessionId
-    );
-    console.log(
       "[saveMessageToSession] Raw message:",
       JSON.stringify(message, null, 2)
     );
-
-    // Validate required fields
-    if (!sessionId) {
-      console.error("[saveMessageToSession] No sessionId provided");
-      return;
-    }
-    if (!message || !message.role) {
-      console.error("[saveMessageToSession] Invalid message format:", message);
-      return;
-    }
 
     // Handle different message formats
     let content = [];
@@ -685,104 +703,19 @@ async function saveMessageToSession(
       content = [{ type: "text", text: message.text }];
     } else {
       console.log("[saveMessageToSession] No recognized content field found");
-      content = [{ type: "text", text: "No content found" }];
-    }
-
-    // Ensure content is properly formatted for database storage
-    const contentData = content;
-    const contextResources = message.contextResources || null;
-
-    let tokenUsagePayload =
-      typeof (message as any).token_usage !== "undefined"
-        ? (message as any).token_usage
-        : typeof (message as any).tokenUsage !== "undefined"
-        ? (message as any).tokenUsage
-        : undefined;
-
-    if (typeof tokenUsagePayload === "undefined") {
-      tokenUsagePayload = null;
-    }
-
-    if (contextResources) {
-      if (
-        tokenUsagePayload &&
-        typeof tokenUsagePayload === "object" &&
-        !Array.isArray(tokenUsagePayload)
-      ) {
-        tokenUsagePayload = {
-          ...tokenUsagePayload,
-          contextResources,
-        };
-      } else {
-        tokenUsagePayload = { contextResources };
-      }
     }
 
     const insertData = {
-      id: crypto.randomUUID(),
       session_id: sessionId,
       role: message.role,
-      content: contentData,
-      token_usage: tokenUsagePayload ?? null,
+      content: content,
       tool_calls: message.tool_calls || message.toolCalls || null,
     };
-
-    console.log(
-      "[saveMessageToSession] Content data structure:",
-      JSON.stringify(contentData, null, 2)
-    );
 
     console.log(
       "[saveMessageToSession] Inserting data:",
       JSON.stringify(insertData, null, 2)
     );
-
-    // Check if session exists first
-    console.log("[saveMessageToSession] Checking if session exists...");
-    const { data: sessionData, error: sessionError } = await supabase
-      .from("chat_sessions")
-      .select("id")
-      .eq("id", sessionId)
-      .single();
-
-    if (sessionError) {
-      console.error(
-        "[saveMessageToSession] Session does not exist:",
-        sessionError
-      );
-      console.log(
-        "[saveMessageToSession] Waiting 100ms and retrying session check..."
-      );
-
-      // Wait a bit for session to be fully created
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Retry session check
-      const { data: retrySessionData, error: retrySessionError } =
-        await supabase
-          .from("chat_sessions")
-          .select("id")
-          .eq("id", sessionId)
-          .single();
-
-      if (retrySessionError) {
-        console.error(
-          "[saveMessageToSession] Session still does not exist after retry:",
-          retrySessionError
-        );
-        console.log(
-          "[saveMessageToSession] Cannot save message - session must be created first"
-        );
-        return;
-      } else {
-        console.log(
-          "[saveMessageToSession] Session exists after retry:",
-          retrySessionData
-        );
-      }
-    } else {
-      console.log("[saveMessageToSession] Session exists:", sessionData);
-    }
 
     const { data, error } = await supabase
       .from("chat_messages")
@@ -795,18 +728,10 @@ async function saveMessageToSession(
         "[saveMessageToSession] Error details:",
         JSON.stringify(error, null, 2)
       );
-      console.error("[saveMessageToSession] Error code:", error.code);
-      console.error("[saveMessageToSession] Error message:", error.message);
-      console.error("[saveMessageToSession] Error hint:", error.hint);
     } else {
       console.log("[saveMessageToSession] Successfully saved message:", data);
-      console.log("[saveMessageToSession] Saved message ID:", data?.[0]?.id);
     }
   } catch (error) {
     console.error("[saveMessageToSession] Exception:", error);
-    console.error(
-      "[saveMessageToSession] Exception stack:",
-      error instanceof Error ? error.stack : "No stack trace"
-    );
   }
 }
