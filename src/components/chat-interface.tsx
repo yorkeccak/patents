@@ -2816,7 +2816,7 @@ export function ChatInterface({
                   <motion.button
                     onClick={() =>
                       handlePromptClick(
-                        "Find patents similar to a machine learning system that uses transformer neural networks for drug discovery. Search for prior art covering attention mechanisms, molecular representation learning, and protein-ligand binding prediction. Create a CSV with patent numbers, assignees, filing dates, and relevance scores."
+                        "Map the competitive landscape for CRISPR base editing technologies filed 2020-2024. Analyze patents covering adenine and cytosine base editors, prime editing systems, and in vivo delivery methods. Create a CSV with assignees, filing trends, and technology clusters. Generate visualizations showing R&D velocity by institution and forecast which editing modalities will dominate clinical applications by 2027."
                       )
                     }
                     className="bg-muted/50 p-2.5 sm:p-4 rounded-xl border border-border hover:border-primary transition-colors hover:bg-muted text-left group"
@@ -2826,17 +2826,17 @@ export function ChatInterface({
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="text-foreground mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-foreground">
-                      🔍 Prior Art Search
+                      Gene Editing Intel
                     </div>
                     <div className="text-[10px] sm:text-xs text-muted-foreground">
-                      ML patents for drug discovery
+                      CRISPR base editing competitive landscape
                     </div>
                   </motion.button>
 
                   <motion.button
                     onClick={() =>
                       handlePromptClick(
-                        "Analyze Google's patent portfolio in artificial intelligence filed from 2020-2024. Show filing trends over time, identify top CPC classifications, and compare with Microsoft's AI patent activity. Create visualizations showing: 1) Filing trends by year, 2) Technology focus areas, 3) Top inventors and their specializations."
+                        "Analyze SpaceX, Blue Origin, and Rocket Lab patent portfolios in reusable launch systems filed 2018-2024. Focus on rapid reusability, autonomous landing, and propulsion efficiency. Create charts showing: 1) Filing velocity and R&D investment signals, 2) Technology clustering around vertical landing vs horizontal recovery, 3) Citation network analysis to identify foundational patents. Calculate portfolio strength metrics and forecast which company will achieve lowest cost-per-kg to orbit by 2026."
                       )
                     }
                     className="bg-muted/50 p-2.5 sm:p-4 rounded-xl border border-border hover:border-primary transition-colors hover:bg-muted text-left group"
@@ -2846,17 +2846,17 @@ export function ChatInterface({
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="text-foreground mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-foreground">
-                      📊 Portfolio Analysis
+                      Launch Systems R&D
                     </div>
                     <div className="text-[10px] sm:text-xs text-muted-foreground">
-                      Google vs Microsoft AI patents
+                      SpaceX vs Blue Origin vs Rocket Lab
                     </div>
                   </motion.button>
 
                   <motion.button
                     onClick={() =>
                       handlePromptClick(
-                        "Conduct a freedom-to-operate analysis for CRISPR gene editing in therapeutic applications. Search for active patents covering Cas9 systems, guide RNA design, and delivery methods. Identify blocking patents owned by Broad Institute, UC Berkeley, and Editas Medicine. Generate a risk assessment matrix with patent numbers, claim coverage, and expiration dates."
+                        "Find all patents covering AI-driven drug discovery platforms filed by major pharma companies 2021-2024. Search for: generative models for molecular design, protein structure prediction, binding affinity prediction, and ADMET optimization. Identify which companies are positioned to accelerate clinical candidates from discovery to Phase I trials. Create a competitive matrix showing technology readiness levels and forecast which platforms will produce FDA-approved drugs first."
                       )
                     }
                     className="bg-muted/50 p-2.5 sm:p-4 rounded-xl border border-border hover:border-primary transition-colors hover:bg-muted text-left group"
@@ -2866,17 +2866,17 @@ export function ChatInterface({
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="text-foreground mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-foreground">
-                      ⚖️ Freedom-to-Operate
+                      AI Drug Discovery
                     </div>
                     <div className="text-[10px] sm:text-xs text-muted-foreground">
-                      CRISPR patent landscape & FTO
+                      Accelerating R&D to clinical trials
                     </div>
                   </motion.button>
 
                   <motion.button
                     onClick={() =>
                       handlePromptClick(
-                        "Find all patents filed by Tesla in battery technology from 2015-2024. Focus on solid-state batteries, lithium-sulfur chemistry, and battery management systems. Create a CSV with: patent numbers, titles, filing dates, current status, and key claims. Identify which patents cover the 4680 battery cell design."
+                        "Search for patents covering neuromorphic computing and brain-computer interfaces filed 2020-2024. Focus on: spiking neural networks, memristor arrays, invasive and non-invasive BCIs, and signal processing for neural decoding. Identify blocking patents that would prevent commercial deployment of high-bandwidth BCIs. Generate a freedom-to-operate analysis for a startup building a speech neuroprosthetic device, including expiration dates and licensing opportunities."
                       )
                     }
                     className="bg-muted/50 p-2.5 sm:p-4 rounded-xl border border-border hover:border-primary transition-colors hover:bg-muted text-left group"
@@ -2886,17 +2886,17 @@ export function ChatInterface({
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="text-foreground mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-foreground">
-                      🔋 Competitive Intel
+                      BCI Freedom-to-Operate
                     </div>
                     <div className="text-[10px] sm:text-xs text-muted-foreground">
-                      Tesla battery patent portfolio
+                      Neuromorphic computing & neural interfaces
                     </div>
                   </motion.button>
 
                   <motion.button
                     onClick={() =>
                       handlePromptClick(
-                        "Compare patent portfolios of OpenAI, Anthropic, and Google DeepMind in large language models. Analyze filing trends, citation networks, and technology focus areas. Create visualizations showing: 1) Patent filing velocity 2020-2024, 2) Citation impact scores, 3) Technology clustering (training methods, inference optimization, safety techniques). Use Python to calculate portfolio strength metrics."
+                        "Map invalidating prior art for patent litigation involving quantum computing IP. Search for patents and publications pre-2016 covering: superconducting qubit designs, quantum error correction codes, and quantum gate implementations. Create comprehensive claim charts mapping prior art elements to asserted claims. Identify the strongest obviousness combinations and calculate litigation risk scores. Use this analysis to forecast settlement ranges and trial outcomes."
                       )
                     }
                     className="bg-muted/50 p-2.5 sm:p-4 rounded-xl border border-border hover:border-primary transition-colors hover:bg-muted text-left group"
@@ -2906,17 +2906,17 @@ export function ChatInterface({
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="text-foreground mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-foreground">
-                      🤖 LLM Landscape
+                      Patent Litigation Intel
                     </div>
                     <div className="text-[10px] sm:text-xs text-muted-foreground">
-                      OpenAI vs Anthropic vs DeepMind
+                      Invalidation search + claim charts + risk scoring
                     </div>
                   </motion.button>
 
                   <motion.button
                     onClick={() =>
                       handlePromptClick(
-                        "Search for invalidating prior art for US Patent 11,234,567 covering a 'method for real-time object detection using convolutional neural networks.' Find patents and publications from before the 2018 priority date that disclose: CNN architectures for object detection, real-time inference optimization, and mobile deployment. Create a comprehensive claim chart mapping prior art elements to each claim limitation. Identify the strongest anticipation and obviousness arguments."
+                        "Create comprehensive CSV of defense technology patents filed in 2024-2025 across all major assignees. Segment by: autonomous weapons systems, hypersonic propulsion, directed energy weapons, AI target recognition, electronic warfare, and swarming UAV coordination. Generate detailed plots showing patent concentration by technology area and assignee. Analyze filing trends to forecast emerging weapons development priorities and identify which nations are accelerating specific capabilities. Use citation analysis to map technology transfer between defense contractors."
                       )
                     }
                     className="bg-primary/10 p-2.5 sm:p-4 rounded-xl border border-primary hover:border-primary transition-colors hover:bg-primary/15 text-left group col-span-1 sm:col-span-2 lg:col-span-1"
@@ -2926,10 +2926,10 @@ export function ChatInterface({
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="text-primary mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-primary">
-                      🚀 Invalidation Search
+                      Defense Tech Forecasting
                     </div>
                     <div className="text-[10px] sm:text-xs text-primary/80">
-                      Prior art + Claim chart + Litigation support
+                      Weapons development trends + competitive intelligence
                     </div>
                   </motion.button>
                 </div>

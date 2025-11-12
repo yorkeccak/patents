@@ -352,7 +352,6 @@ const DataSourceLogos = () => {
     { name: "bioRxiv", src: "/assets/banner/biorxiv.png" },
     { name: "medRxiv", src: "/assets/banner/medrxiv.png" },
     { name: "arXiv", src: "/assets/banner/arxiv.png" },
-    { name: "DailyMed", src: "/assets/banner/dailymed.png" },
     { name: "WHO", src: "/assets/banner/who.png" },
     { name: "USPTO", src: "/assets/banner/uspto.png" },
   ];
