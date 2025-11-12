@@ -66,11 +66,11 @@ export function VirtualizedContentDialog({
         </DialogHeader>
         <div className="flex-1 overflow-y-auto mt-4">
           {isJson ? (
-            <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+            <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-muted p-4 rounded-lg">
               {JSON.stringify(JSON.parse(content), null, 2)}
             </pre>
           ) : (
-            <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+            <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-muted p-4 rounded-lg">
               {content}
             </pre>
           )}

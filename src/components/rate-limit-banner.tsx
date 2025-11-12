@@ -70,18 +70,18 @@ export function RateLimitBanner() {
             relative rounded-xl border shadow-lg backdrop-blur-sm px-4 py-3
             ${
               noQueriesLeft
-                ? 'bg-red-50/95 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+                ? 'bg-destructive/10 border-destructive/50'
                 : isLastQuery
-                ? 'bg-orange-50/95 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800'
-                : 'bg-blue-50/95 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800'
+                ? 'bg-destructive/5 border-destructive/30'
+                : 'bg-primary/10 border-primary/30'
             }
           `}
         >
           <button
             onClick={() => setIsDismissed(true)}
-            className="absolute top-2 right-2 p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded transition-colors"
+            className="absolute top-2 right-2 p-1 hover:bg-muted rounded transition-colors"
           >
-            <X className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+            <X className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
 
           <div className="flex items-start gap-3 pr-6">
@@ -90,10 +90,10 @@ export function RateLimitBanner() {
                 w-5 h-5 mt-0.5 flex-shrink-0
                 ${
                   noQueriesLeft
-                    ? 'text-red-600 dark:text-red-400'
+                    ? 'text-destructive'
                     : isLastQuery
-                    ? 'text-orange-600 dark:text-orange-400'
-                    : 'text-blue-600 dark:text-blue-400'
+                    ? 'text-destructive/80'
+                    : 'text-primary'
                 }
               `}
             />
@@ -105,10 +105,10 @@ export function RateLimitBanner() {
                     text-sm font-semibold
                     ${
                       noQueriesLeft
-                        ? 'text-red-900 dark:text-red-100'
+                        ? 'text-destructive'
                         : isLastQuery
-                        ? 'text-orange-900 dark:text-orange-100'
-                        : 'text-blue-900 dark:text-blue-100'
+                        ? 'text-destructive/90'
+                        : 'text-primary'
                     }
                   `}
                 >
@@ -123,10 +123,10 @@ export function RateLimitBanner() {
                     text-xs mt-1
                     ${
                       noQueriesLeft
-                        ? 'text-red-700 dark:text-red-300'
+                        ? 'text-destructive/80'
                         : isLastQuery
-                        ? 'text-orange-700 dark:text-orange-300'
-                        : 'text-blue-700 dark:text-blue-300'
+                        ? 'text-destructive/70'
+                        : 'text-primary/80'
                     }
                   `}
                 >
@@ -147,7 +147,7 @@ export function RateLimitBanner() {
                     onClick={() =>
                       window.dispatchEvent(new CustomEvent('show-auth-modal'))
                     }
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
                   >
                     <Sparkles className="w-3 h-3" />
                     <span>Sign in</span>
@@ -157,7 +157,7 @@ export function RateLimitBanner() {
                     onClick={() =>
                       window.dispatchEvent(new CustomEvent('show-upgrade-modal'))
                     }
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-all shadow-sm"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-all shadow-sm"
                   >
                     <Crown className="w-3 h-3" />
                     <span>Upgrade</span>

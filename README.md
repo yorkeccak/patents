@@ -1,64 +1,76 @@
 # PatentAI
 
-> **The world's first conversational patent search** - Access USPTO, EPO, PCT patents through natural language. Powered by Valyu's specialized patent data infrastructure.
+> **The world's first conversational patent search** - Access USPTO patents through natural language. Powered by Valyu's patent search infrastructure.
 
-🚀 **[Try the live demo](https://patents.valyu.ai)**
+**[Try the live demo](https://patents.valyu.ai)**
 
 ![PatentAI](public/valyu.png)
 
-## Why PatentAI?
+## The Problem
 
-Traditional patent search tools cost $10,000-$50,000/year, require specialized training, and take hours per search. PatentAI changes everything:
+Traditional patent search is broken.
 
-- **🔍 Conversational Search** - Ask questions in natural language, no Boolean syntax or CPC codes required
-- **⚡ 95% Faster** - What takes 4-8 hours with traditional tools takes 5 minutes with PatentAI
-- **💰 10x Cheaper** - Professional-grade patent search at a fraction of the cost
-- **🌐 Comprehensive Coverage** - USPTO, EPO, PCT, and international patents with English abstracts
-- **🐍 Advanced Analytics** - Execute Python code for citation analysis, portfolio metrics, technology landscapes
-- **📊 Interactive Visualizations** - Beautiful charts for competitive intelligence and trend analysis
-- **🏠 Local AI Models** - Run with Ollama or LM Studio for unlimited, private searches
-- **🎯 Multiple Search Modes** - Prior art, FTO analysis, competitive intelligence, citation analysis
+You're spending **$10,000-$50,000 per year** per seat on tools like PatSnap, Derwent Innovation, or Clarivate. Your team wastes **4-8 hours** crafting Boolean queries, learning CPC classifications, and sifting through irrelevant results. A single prior art search costs **$1,600-$3,200** in attorney time.
 
-## Key Features
+Meanwhile, your competitors are filing faster. Your R&D team can't check novelty without burning budget. Your startups are launching products blind to infringement risks because they can't afford proper FTO analysis.
 
-### 🔥 Powerful Patent Search Tools
+**Every day without proper patent search is money on the table—or worse, money at risk.**
+
+## The Solution
+
+PatentAI eliminates the friction. Ask questions in plain English. Get comprehensive patent results in 5 minutes instead of 8 hours. Pay $29/month instead of $12,000/year.
+
+**Professional-grade patent intelligence, accessible to everyone.**
+
+### What PatentAI Does
+
+- **Conversational Search** - No Boolean syntax. No CPC codes. Just ask your question naturally.
+- **95% Faster** - What takes 4-8 hours takes 5 minutes. Get back to high-value work.
+- **10x Cheaper** - Professional search at a fraction of legacy tool costs.
+- **Comprehensive Coverage** - USPTO, EPO, PCT, and international patents with English abstracts.
+- **Advanced Analytics** - Execute Python for citation analysis, portfolio metrics, technology landscapes.
+- **Interactive Visualizations** - Beautiful charts for competitive intelligence and trend analysis.
+- **Local AI Models** - Run with Ollama or LM Studio for unlimited, private searches.
+- **Multiple Search Modes** - Prior art, FTO analysis, competitive intelligence, citation analysis.
+
+## Key Capabilities
+
+### Patent Search Tools
 
 - **Patent Search** - Semantic search across millions of patents (USPTO, EPO, PCT)
 - **Prior Art Search** - Find anticipating references for patentability assessment
-- **Competitive Intelligence** - Analyze competitor patent portfolios and technology strategies
+- **Competitive Intelligence** - Analyze competitor portfolios and technology strategies
 - **Freedom-to-Operate** - Identify blocking patents and infringement risks
 - **Citation Analysis** - Map forward/backward citations and identify influential patents
 - **Technology Landscapes** - Visualize patent activity across technology domains
-- **Interactive Charts** - Create filing trends, portfolio comparisons, technology matrices
+- **Interactive Charts** - Filing trends, portfolio comparisons, technology matrices
 - **Python Analytics** - Statistical analysis, network metrics, portfolio valuation
 
-### 🛠️ Advanced Tool Calling
+### Advanced Tooling
 
 - **Python Code Execution** - Patent analytics, citation metrics, portfolio strength calculations
 - **Interactive Charts** - Filing trends, competitive landscapes, citation networks
 - **Multi-Search Modes** - Prior art, FTO, competitive intelligence, invalidation research
 - **Export & Share** - Download results, generate reports, create claim charts
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Two Modes: Production vs Development
 
-PatentAI supports two distinct operating modes:
-
-**🌐 Production Mode** (Default)
+**Production Mode** (Default)
 - Uses Supabase for authentication and database
 - OpenAI/Vercel AI Gateway for LLM
 - Rate limiting (5 queries/day for free tier)
 - Billing and usage tracking via Polar
 - Full authentication required
 
-**💻 Development Mode** (Recommended for Local Development)
-- **No Supabase required** - Uses local SQLite database
-- **No authentication needed** - Auto-login as dev user
-- **Unlimited queries** - No rate limits
-- **No billing/tracking** - Polar integration disabled
-- **Works offline** - Complete local development
-- **Ollama/LM Studio integration** - Use local LLMs for privacy and unlimited usage
+**Development Mode** (Recommended for Local)
+- No Supabase required - Uses local SQLite database
+- No authentication needed - Auto-login as dev user
+- Unlimited queries - No rate limits
+- No billing/tracking - Polar integration disabled
+- Works offline - Complete local development
+- Ollama/LM Studio integration - Use local LLMs for privacy and unlimited usage
 
 ### Prerequisites
 
@@ -71,7 +83,7 @@ PatentAI supports two distinct operating modes:
 - Supabase account and project
 - Polar account (for billing)
 
-**For Development Mode (Recommended for getting started):**
+**For Development Mode:**
 - Node.js 18+
 - npm or pnpm
 - Valyu API key (get one at [platform.valyu.ai](https://platform.valyu.ai))
@@ -156,11 +168,11 @@ PatentAI supports two distinct operating modes:
    - **Development Mode**: You'll be automatically logged in as `dev@localhost`
    - **Production Mode**: You'll need to sign up/sign in
 
-## 🏠 Development Mode Guide
+## Development Mode Guide
 
 ### What is Development Mode?
 
-Development mode provides a complete local development environment without any external dependencies beyond the core APIs (Valyu, Daytona). It's perfect for:
+Development mode provides a complete local development environment without any external dependencies beyond the core APIs (Valyu, Daytona). Perfect for:
 
 - **Local Development** - No Supabase setup required
 - **Offline Work** - All data stored locally in SQLite
@@ -170,12 +182,12 @@ Development mode provides a complete local development environment without any e
 
 ### Setting Up Ollama (Recommended)
 
-Ollama provides unlimited, private LLM inference on your local machine - completely free and runs offline!
+Ollama provides unlimited, private LLM inference on your local machine.
 
-**🚀 Quick Setup (No Terminal Required):**
+**Quick Setup:**
 
 1. **Download Ollama App**
-   - Visit [ollama.com](https://ollama.com) and download the app for your OS
+   - Visit [ollama.com](https://ollama.com) and download the app
    - Install and open the Ollama app
    - It runs in your menu bar (macOS) or system tray (Windows/Linux)
 
@@ -183,16 +195,13 @@ Ollama provides unlimited, private LLM inference on your local machine - complet
    - Open Ollama app and browse available models
    - Download `qwen2.5:7b` (recommended - best for patent search with tool support)
    - Or choose from: `llama3.1`, `mistral`, `deepseek-r1`
-   - That's it! PatentAI will automatically detect and use it
 
 3. **Use in PatentAI**
    - Start the app in development mode
    - Ollama status indicator appears in top-right corner
-   - Shows your available models
-   - Click to select which model to use
-   - Icons show capabilities: 🔧 (tools) and 🧠 (reasoning)
+   - Shows your available models - click to select which to use
 
-**⚡ Advanced Setup (Terminal):**
+**Advanced Setup (Terminal):**
 
 ```bash
 # Install Ollama
@@ -211,30 +220,25 @@ ollama pull deepseek-r1:7b      # For reasoning/thinking mode
 
 ### Setting Up LM Studio (Alternative)
 
-LM Studio provides a beautiful GUI for running local LLMs - perfect if you prefer visual interfaces!
+LM Studio provides a GUI for running local LLMs.
 
 1. **Download LM Studio**
-   - Visit [lmstudio.ai](https://lmstudio.ai) and download for your OS
+   - Visit [lmstudio.ai](https://lmstudio.ai) and download
    - Install and open LM Studio
 
 2. **Download Models**
-   - Click 🔍 Search icon in LM Studio
    - Search for: `qwen/qwen3-14b`, `openai/gpt-oss-20b`, or `google/gemma-3-12b`
    - Click download and wait for completion
 
 3. **Start the Server**
-   - Click LM Studio menu bar icon (top-right on macOS)
-   - Select **"Start Server on Port 1234..."**
-   - Server starts immediately
+   - Click menu bar icon (top-right)
+   - Select "Start Server on Port 1234..."
 
-4. **⚠️ CRITICAL: Configure Context Window**
-   - Set **Context Length** to **at least 8192 tokens** (16384+ recommended)
-   - PatentAI uses extensive tool descriptions that require adequate context length
-   - Without sufficient context, you'll get errors when AI tries to use tools
+4. **Configure Context Window**
+   - Set Context Length to at least 8192 tokens (16384+ recommended)
+   - PatentAI requires adequate context for tool descriptions
 
-## 💡 Example Queries
-
-Try these powerful queries to see what PatentAI can do:
+## Example Queries
 
 ### Prior Art Search
 - "Find patents similar to a neural network system that predicts protein structures using attention mechanisms"
@@ -250,7 +254,6 @@ Try these powerful queries to see what PatentAI can do:
 - "Show all AI patents filed by Google in 2023-2024"
 - "Compare patent portfolios of Tesla vs BYD in battery technology"
 - "Find recent patent activity by Moderna in mRNA vaccine delivery"
-- "Identify white space opportunities in quantum computing patents"
 
 ### Technology Landscapes
 - "Create a chart showing patent filing trends in solid-state batteries 2018-2024"
@@ -267,13 +270,7 @@ Try these powerful queries to see what PatentAI can do:
 - "Compare average citation counts for Google vs Microsoft AI patents"
 - "Generate a CSV of Stanford University CRISPR patents with filing dates"
 
-**With Local Models (Ollama/LM Studio):**
-- Run unlimited queries without API costs
-- Keep all your patent research completely private
-- Perfect for confidential invention disclosures
-- Choose your preferred interface: terminal (Ollama) or GUI (LM Studio)
-
-## 🏗️ Architecture
+## Architecture
 
 - **Frontend**: Next.js 15 with App Router, Tailwind CSS, shadcn/ui
 - **AI**: OpenAI GPT-4 with function calling + Ollama/LM Studio for local models
@@ -284,7 +281,7 @@ Try these powerful queries to see what PatentAI can do:
 - **Local Models**: Ollama and LM Studio integration for private, unlimited queries
 - **Database**: Supabase (production) or SQLite (development)
 
-## 🎯 Use Cases
+## Use Cases
 
 ### For Patent Attorneys
 - **Prior Art Search**: 95% time reduction (4-8 hours → 5 minutes)
@@ -292,17 +289,23 @@ Try these powerful queries to see what PatentAI can do:
 - **FTO Analysis**: Identify blocking patents in minutes, not days
 - **Portfolio Management**: Track competitor filings and technology trends
 
+**Value**: A single attorney using PatentAI recovers **$322,400/year** in billable capacity. Stop wasting 80% of research time on database interfaces.
+
 ### For R&D Teams
 - **Patentability Assessment**: Validate ideas before investing in development
 - **Technology Scouting**: Identify licensing opportunities and expired patents
 - **Competitive Analysis**: Monitor competitor innovation strategies
 - **White Space Identification**: Find unpatented technology opportunities
 
+**Value**: Avoid burning **$500K-$2M** developing products that infringe existing patents. One FTO search saves an entire product cycle.
+
 ### For Startups & Inventors
 - **Novelty Checks**: Assess patentability without $2,000+ attorney fees
 - **FTO Screening**: Identify infringement risks before product launch
 - **Strategic IP**: Understand competitive landscape for investor pitches
-- **Cost-Effective**: Access professional-grade search at startup-friendly prices
+- **Cost-Effective**: Professional search at startup-friendly prices
+
+**Value**: De-risk your entire product roadmap for **$29/month** instead of $50K/year in attorney fees. Ship faster with confidence.
 
 ### For Corporate Legal Teams
 - **Portfolio Valuation**: Assess patent strength for M&A due diligence
@@ -310,30 +313,34 @@ Try these powerful queries to see what PatentAI can do:
 - **Licensing Analysis**: Identify potential licensing targets
 - **Risk Management**: Ongoing FTO monitoring for product pipelines
 
+**Value**: One avoided invalid patent filing saves **$100K+**. One avoided infringement suit saves **$1M-$10M+**. Better search quality through AI semantic matching.
+
 ### For Researchers & Universities
 - **Publication Planning**: Check if invention is already patented
 - **Tech Transfer**: Identify commercialization opportunities
 - **Grant Applications**: Prior art searches for NIH/NSF proposals
 - **Collaboration Discovery**: Find companies working in your area
 
-## 💰 Value Proposition
+**Value**: Maximize tech transfer revenue by identifying patentable innovations early. Support grant applications with comprehensive prior art analysis.
+
+## ROI Calculator
 
 ### Time Savings
-- Traditional search: 4-8 hours @ $400/hr = $1,600-$3,200
-- PatentAI search: 5 minutes = **95% time reduction**
-- ROI for law firms: $322,400/year additional billable capacity per associate
+- Traditional search: **4-8 hours @ $400/hr = $1,600-$3,200** per search
+- PatentAI search: **5 minutes** = 95% time reduction
+- Annual capacity recovered per attorney: **$322,400** in billable hours
 
 ### Cost Savings
-- Traditional tools: $10,000-$50,000/year per user
-- PatentAI: $49-$299/month = **90%+ cost reduction**
-- Startup ROI: $500K product investment protected with $50 search
+- Traditional tools: **$10,000-$50,000/year** per user
+- PatentAI: **$29-$299/month** = 90%+ cost reduction
+- 10-person legal team savings: **$470,000/year**
 
 ### Risk Reduction
-- One avoided invalid patent: $100,000+ savings
-- One avoided infringement case: $1M-$10M+ savings
-- Better search quality through AI semantic matching
+- One avoided invalid patent: **$100,000+** savings
+- One avoided infringement case: **$1M-$10M+** savings
+- One protected product launch: **Priceless**
 
-## 🔒 Security
+## Security
 
 - Secure API key management
 - Sandboxed code execution via Daytona
@@ -341,15 +348,15 @@ Try these powerful queries to see what PatentAI can do:
 - HTTPS encryption for all API calls
 - Local model support for confidential work (Ollama/LM Studio)
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome. Submit a Pull Request.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built with [Valyu](https://platform.valyu.ai) - The unified patent data API
 - Powered by [Daytona](https://daytona.io) - Secure code execution
@@ -359,7 +366,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ---
 
 <p align="center">
-  Made with ❤️ for patent professionals, inventors, and innovators
+  Built for patent professionals, inventors, and innovators who refuse to waste time on broken tools.
 </p>
 
 <p align="center">

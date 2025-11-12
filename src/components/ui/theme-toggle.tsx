@@ -7,37 +7,37 @@ import { useRateLimit } from '@/lib/hooks/use-rate-limit';
 export function ThemeSelector() {
   const { setTheme, theme } = useTheme();
   const { tier, hasPolarCustomer } = useRateLimit();
-  
+
   const hasSubscription = tier !== 'free' && tier !== 'anonymous';
 
   return (
-    <ThemeSwitcher 
+    <ThemeSwitcher
       value={theme as 'light' | 'dark' | 'system'}
       onChange={(newTheme) => setTheme(newTheme)}
-      defaultValue="light"
+      defaultValue="dark"
       requiresSubscription={true}
       hasSubscription={hasSubscription}
     />
   );
 }
 
-export function CompactThemeSelector({ 
-  onUpgradeClick, 
-  sessionId 
-}: { 
+export function CompactThemeSelector({
+  onUpgradeClick,
+  sessionId
+}: {
   onUpgradeClick?: () => void;
   sessionId?: string;
 }) {
   const { setTheme, theme } = useTheme();
   const { tier, hasPolarCustomer, userId } = useRateLimit();
-  
+
   const hasSubscription = tier !== 'free' && tier !== 'anonymous';
 
   return (
-    <ThemeSwitcher 
+    <ThemeSwitcher
       value={theme as 'light' | 'dark' | 'system'}
       onChange={(newTheme) => setTheme(newTheme)}
-      defaultValue="light"
+      defaultValue="dark"
       className="h-8 scale-75"
       requiresSubscription={true}
       hasSubscription={hasSubscription}
@@ -52,14 +52,14 @@ export function CompactThemeSelector({
 export function ThemeMenuItem() {
   const { setTheme, theme } = useTheme();
   const { tier, hasPolarCustomer } = useRateLimit();
-  
+
   const hasSubscription = tier !== 'free' && tier !== 'anonymous';
 
   return (
-    <ThemeSwitcher 
+    <ThemeSwitcher
       value={theme as 'light' | 'dark' | 'system'}
       onChange={(newTheme) => setTheme(newTheme)}
-      defaultValue="light"
+      defaultValue="dark"
       requiresSubscription={true}
       hasSubscription={hasSubscription}
     />

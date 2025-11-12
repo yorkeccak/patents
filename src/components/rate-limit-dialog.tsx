@@ -203,10 +203,10 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
             <div className="text-center space-y-6">
               {/* Header */}
               <div>
-                <h2 className="text-xl font-light text-gray-900 dark:text-gray-100 mb-2">
+                <h2 className="text-xl font-light text-foreground mb-2">
                   Daily limit reached
                 </h2>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">
+                <p className="text-muted-foreground text-sm">
                   Resets in <span className="font-medium">{formatResetTime(resetTime)}</span>
                 </p>
               </div>
@@ -245,14 +245,14 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
 
                 {/* Enterprise Option */}
                 {user && process.env.NEXT_PUBLIC_APP_MODE !== 'development' && (
-                  <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="mt-4 p-4 bg-muted rounded-lg border border-border">
                     <div className="flex items-start gap-3 mb-3">
-                      <Building2 className="h-5 w-5 text-slate-600 dark:text-slate-400 mt-0.5" />
+                      <Building2 className="h-5 w-5 text-muted-foreground mt-0.5" />
                       <div>
-                        <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-1">
+                        <h4 className="font-semibold text-sm text-foreground mb-1">
                           Need enterprise deployment?
                         </h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                        <p className="text-xs text-muted-foreground">
                           Deploy Valyu&apos;s infrastructure in your organization with custom data integrations and AI agents
                         </p>
                       </div>
@@ -263,7 +263,7 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
                         track('Enterprise CTA Clicked', { source: 'rate_limit_dialog' });
                       }}
                       variant="outline"
-                      className="w-full text-sm border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      className="w-full text-sm border-border hover:bg-muted"
                     >
                       <Building2 className="mr-2 h-4 w-4" />
                       Book a Demo
@@ -298,9 +298,9 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
               </div>
 
               {/* Simple code example */}
-              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 text-left">
+              <div className="bg-muted rounded-lg p-4 text-left">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">API Example</span>
+                  <span className="text-xs font-medium text-muted-foreground">API Example</span>
                   <Button
                     onClick={() => handleCopy(codeSnippet)}
                     variant="ghost"
@@ -308,13 +308,13 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
                     className="h-6 px-2"
                   >
                     {copied ? (
-                      <Check className="h-3 w-3 text-green-600" />
+                      <Check className="h-3 w-3 text-primary" />
                     ) : (
                       <Copy className="h-3 w-3" />
                     )}
                   </Button>
                 </div>
-                <pre className="text-xs font-mono text-gray-700 dark:text-gray-300 overflow-x-auto">
+                <pre className="text-xs font-mono text-foreground overflow-x-auto">
                   {codeSnippet}
                 </pre>
               </div>

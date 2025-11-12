@@ -81,17 +81,17 @@ const InlineChartRenderer = React.memo(({ chartId, alt }: { chartId: string; alt
 
   if (loading) {
     return (
-      <div className="my-4 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
-        <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
-        <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading chart...</div>
+      <div className="my-4 border border-border rounded-lg p-6 text-center">
+        <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+        <div className="mt-2 text-sm text-muted-foreground">Loading chart...</div>
       </div>
     );
   }
 
   if (error || !chartData) {
     return (
-      <div className="my-4 border border-red-200 dark:border-red-700 rounded-lg p-4 text-center">
-        <div className="text-sm text-red-600 dark:text-red-400">Failed to load chart</div>
+      <div className="my-4 border border-destructive/30 rounded-lg p-4 text-center">
+        <div className="text-sm text-destructive">Failed to load chart</div>
       </div>
     );
   }
@@ -131,7 +131,7 @@ const GroupedCitationBadge = React.memo(({
   
   if (allCitations.length === 0) {
     // If no citations found, just show the keys without hover
-    return <span className="text-blue-600 dark:text-blue-400">{citationKeys.join('')}</span>;
+    return <span className="text-primary">{citationKeys.join('')}</span>;
   }
 
   return (
@@ -281,7 +281,7 @@ const createMarkdownComponents = (citations: CitationMap) => ({
       });
       return <span dangerouslySetInnerHTML={{ __html: html }} className="katex-math" />;
     } catch (error) {
-      return <code className="math-fallback bg-gray-100 px-1 rounded">{mathContent}</code>;
+      return <code className="math-fallback bg-muted px-1 rounded">{mathContent}</code>;
     }
   },
   
@@ -297,7 +297,7 @@ const createMarkdownComponents = (citations: CitationMap) => ({
     } catch {
       if (!src.startsWith('/') && !src.startsWith('csv:') && !src.match(/^\/api\/(charts|csvs)\//)) {
         return (
-          <span className="text-xs text-gray-500 italic">
+          <span className="text-xs text-muted-foreground italic">
             [Image: {alt || src}]
           </span>
         );

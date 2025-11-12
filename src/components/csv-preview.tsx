@@ -59,26 +59,26 @@ function CSVPreviewComponent({
   };
 
   return (
-    <div className="w-full bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-900/80 rounded-xl border border-gray-200/80 dark:border-gray-700/50 overflow-hidden shadow-sm">
+    <div className="w-full bg-gradient-to-br from-background to-background rounded-xl border border-border overflow-hidden shadow-sm">
       {/* Header - elegant and clean */}
-      <div className="px-5 py-4 border-b border-gray-200/60 dark:border-gray-700/50">
+      <div className="px-5 py-4 border-b border-border">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1.5">
+            <h3 className="text-base font-semibold text-foreground mb-1.5">
               {title}
             </h3>
             {description && (
-              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 {description}
               </p>
             )}
 
             {/* Metadata Badges - minimal and refined */}
             <div className="flex gap-2 mt-2.5">
-              <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+              <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-md bg-muted text-foreground">
                 {rowCount} Row{rowCount !== 1 ? 's' : ''}
               </span>
-              <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+              <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-md bg-muted text-foreground">
                 {columnCount} Column{columnCount !== 1 ? 's' : ''}
               </span>
             </div>
@@ -90,23 +90,23 @@ function CSVPreviewComponent({
               onClick={handleCopy}
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-800"
+              className="h-8 w-8 p-0 hover:bg-muted"
               title="Copy CSV to clipboard"
             >
               {copied ? (
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
               ) : (
-                <Copy className="w-3.5 h-3.5 text-gray-500" />
+                <Copy className="w-3.5 h-3.5 text-muted-foreground" />
               )}
             </Button>
             <Button
               onClick={handleDownload}
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-800"
+              className="h-8 w-8 p-0 hover:bg-muted"
               title="Download CSV file"
             >
-              <Download className="w-3.5 h-3.5 text-gray-500" />
+              <Download className="w-3.5 h-3.5 text-muted-foreground" />
             </Button>
           </div>
         </div>
@@ -117,12 +117,12 @@ function CSVPreviewComponent({
         <div className="max-h-[500px] overflow-x-auto overflow-y-auto -mx-3 px-3 sm:mx-0 sm:px-0">
           <table className="w-full border-collapse text-xs min-w-max">
             {/* Header - refined styling */}
-            <thead className="sticky top-0 z-10 bg-gradient-to-b from-gray-50 to-gray-100/80 dark:from-gray-800 dark:to-gray-850/80 backdrop-blur-sm">
-              <tr className="border-b-2 border-gray-200 dark:border-gray-700">
+            <thead className="sticky top-0 z-10 bg-gradient-to-b from-muted to-muted backdrop-blur-sm">
+              <tr className="border-b-2 border-border">
                 {headers.map((header, index) => (
                   <th
                     key={index}
-                    className="px-4 py-2.5 text-left font-semibold text-gray-800 dark:text-gray-200 whitespace-nowrap"
+                    className="px-4 py-2.5 text-left font-semibold text-foreground whitespace-nowrap"
                   >
                     {header}
                   </th>
@@ -135,12 +135,12 @@ function CSVPreviewComponent({
               {rows.map((row, rowIndex) => (
                 <tr
                   key={rowIndex}
-                  className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors"
+                  className="border-b border-border/50 hover:bg-muted transition-colors"
                 >
                   {row.map((cell, cellIndex) => (
                     <td
                       key={cellIndex}
-                      className="px-4 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap"
+                      className="px-4 py-2 text-foreground whitespace-nowrap"
                     >
                       {cell}
                     </td>

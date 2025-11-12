@@ -80,7 +80,7 @@ import { CsvRenderer } from "@/components/csv-renderer";
 import { Favicon } from "@/components/favicon";
 const JsonView = dynamic(() => import("@uiw/react-json-view"), {
   ssr: false,
-  loading: () => <div className="text-xs text-gray-500">Loading JSON…</div>,
+  loading: () => <div className="text-xs text-muted-foreground">Loading JSON…</div>,
 });
 import {
   preprocessMarkdownText,
@@ -92,6 +92,8 @@ import DataSourceLogos from "./data-source-logos";
 import SocialLinks from "./social-links";
 import { calculateMessageMetrics, MessageMetrics } from "@/lib/metrics-calculator";
 import { MetricsPills } from "@/components/metrics-pills";
+import { PatentCard } from "@/components/patent-card";
+import { PatentDetailsPanel } from "@/components/patent-details-panel";
 
 // Debug toggles removed per request
 
@@ -138,36 +140,36 @@ const TimelineStep = memo(({
       {/* Minimal, refined design */}
       <div
         className={`relative flex items-start gap-4 py-4 px-3 sm:px-4 -mx-1 sm:-mx-2 rounded-md transition-all duration-150 ${
-          isStreaming ? 'bg-blue-50/50 dark:bg-blue-950/10' : ''
+          isStreaming ? 'bg-primary/5' : ''
         } ${
-          hasContent ? 'hover:bg-gray-50 dark:hover:bg-white/[0.02] cursor-pointer' : ''
+          hasContent ? 'hover:bg-muted dark:hover:bg-card/[0.02] cursor-pointer' : ''
         }`}
         onClick={hasContent ? toggleExpand : undefined}
       >
         {/* Minimal status indicator */}
         <div className="flex-shrink-0">
           {isComplete ? (
-            <div className="w-4 h-4 rounded-full bg-emerald-500/15 dark:bg-emerald-500/25 flex items-center justify-center">
-              <Check className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-500 stroke-[2.5]" />
+            <div className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center">
+              <Check className="w-2.5 h-2.5 text-primary stroke-[2.5]" />
             </div>
           ) : isStreaming ? (
             <div className="relative w-4 h-4">
-              <div className="absolute inset-0 rounded-full border border-blue-300/40 dark:border-blue-700/40" />
-              <div className="absolute inset-0 rounded-full border border-transparent border-t-blue-500 dark:border-t-blue-400 animate-spin" />
+              <div className="absolute inset-0 rounded-full border border-primary/40" />
+              <div className="absolute inset-0 rounded-full border border-transparent border-t-primary animate-spin" />
             </div>
           ) : isError ? (
-            <div className="w-4 h-4 rounded-full bg-red-500/15 dark:bg-red-500/25 flex items-center justify-center">
-              <AlertCircle className="w-2.5 h-2.5 text-red-600 dark:text-red-500" />
+            <div className="w-4 h-4 rounded-full bg-destructive/10 flex items-center justify-center">
+              <AlertCircle className="w-2.5 h-2.5 text-destructive" />
             </div>
           ) : (
-            <div className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-700" />
+            <div className="w-4 h-4 rounded-full border border-border" />
           )}
         </div>
 
         {/* Clean icon */}
         {icon && (
           <div className={`flex-shrink-0 w-4 h-4 ${
-            isStreaming ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'
+            isStreaming ? 'text-primary' : 'text-muted-foreground'
           }`}>
             {icon}
           </div>
@@ -176,12 +178,12 @@ const TimelineStep = memo(({
         {/* Clean typography */}
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2">
-            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+            <span className="text-sm font-medium text-foreground">
               {title}
             </span>
           </div>
           {subtitle && !isExpanded && (
-            <div className="text-xs text-gray-500 dark:text-gray-500 line-clamp-1 mt-0.5">
+            <div className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
               {subtitle}
             </div>
           )}
@@ -189,7 +191,7 @@ const TimelineStep = memo(({
 
         {/* Minimal chevron */}
         {hasContent && !isStreaming && (
-          <ChevronDown className={`h-3.5 w-3.5 text-gray-400 dark:text-gray-600 flex-shrink-0 transition-transform duration-150 ${
+          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground flex-shrink-0 transition-transform duration-150 ${
             isExpanded ? 'rotate-180' : ''
           }`} />
         )}
@@ -199,7 +201,7 @@ const TimelineStep = memo(({
       {isExpanded && hasContent && (
         <div className="mt-1.5 ml-6 mr-2 animate-in fade-in duration-150">
           {children || (
-            <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 bg-gray-50/50 dark:bg-white/[0.02] rounded-lg px-3 py-2.5 border-l-2 border-gray-200 dark:border-gray-800">
+            <div className="text-sm leading-relaxed text-foreground bg-muted/50 rounded-lg px-3 py-2.5 border-l-2 border-border">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                 {part.text || ''}
               </ReactMarkdown>
@@ -235,10 +237,10 @@ const LiveReasoningPreview = memo(({ title, lines }: { title: string; lines: str
       transition={{ duration: 0.12, ease: 'easeOut' }}
       className="my-1 ml-3 sm:ml-8 mr-3 sm:mr-0"
     >
-      <div className="bg-blue-50/50 dark:bg-blue-950/20 border-l-2 border-blue-300 dark:border-blue-700 rounded-r px-2 sm:px-2.5 py-1.5 space-y-1 overflow-hidden max-w-full">
+      <div className="bg-primary/10 border-l-2 border-primary rounded-r px-2 sm:px-2.5 py-1.5 space-y-1 overflow-hidden max-w-full">
         {/* Show the latest **title** */}
         {title && (
-          <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 truncate">
+          <div className="text-xs font-semibold text-primary truncate">
             {title}
           </div>
         )}
@@ -252,7 +254,7 @@ const LiveReasoningPreview = memo(({ title, lines }: { title: string; lines: str
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -5 }}
               transition={{ duration: 0.08 }}
-              className="text-xs text-gray-500 dark:text-gray-400 leading-snug truncate max-w-full"
+              className="text-xs text-muted-foreground leading-snug truncate max-w-full"
             >
               {line}
             </motion.div>
@@ -354,17 +356,17 @@ const ChartImageRendererComponent = ({ chartId, alt }: { chartId: string; alt?: 
 
   if (loading) {
     return (
-      <span className="block w-full border border-gray-200 dark:border-gray-700 rounded-lg p-12 my-4 text-center">
-        <span className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></span>
-        <span className="block mt-3 text-sm text-gray-500 dark:text-gray-400">Loading chart...</span>
+      <span className="block w-full border border-border rounded-lg p-12 my-4 text-center">
+        <span className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></span>
+        <span className="block mt-3 text-sm text-muted-foreground">Loading chart...</span>
       </span>
     );
   }
 
   if (error || !chartData) {
     return (
-      <span className="block w-full border border-red-200 dark:border-red-700 rounded-lg p-6 my-4 text-center">
-        <span className="text-sm text-red-600 dark:text-red-400">Failed to load chart</span>
+      <span className="block w-full border border-destructive/30 rounded-lg p-6 my-4 text-center">
+        <span className="text-sm text-destructive">Failed to load chart</span>
       </span>
     );
   }
@@ -397,7 +399,7 @@ const MemoizedChartResult = memo(function MemoizedChartResult({
   toggleToolExpansion: (id: string) => void;
 }) {
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div className="border border-border rounded-lg overflow-hidden">
       <BiomedicalChart {...chartData} />
     </div>
   );
@@ -438,16 +440,16 @@ const MemoizedCodeExecutionResult = memo(function MemoizedCodeExecutionResult({
     <div className="space-y-4">
       {/* Code Section - clean monospace display */}
       <div>
-        <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Input</div>
-        <pre className="p-4 bg-gray-900 dark:bg-black/40 text-gray-100 text-xs overflow-x-auto rounded-lg max-h-[400px] overflow-y-auto border border-gray-800 dark:border-gray-800/50 shadow-inner">
+        <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Input</div>
+        <pre className="p-4 bg-card bg-card text-foreground text-xs overflow-x-auto rounded-lg max-h-[400px] overflow-y-auto border border-border shadow-inner">
           <code>{code || "No code available"}</code>
         </pre>
       </div>
 
       {/* Output Section - elegant typography */}
       <div>
-        <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Output</div>
-        <div className="prose prose-sm max-w-none dark:prose-invert text-sm p-4 bg-white dark:bg-gray-800/50 rounded-lg max-h-[400px] overflow-y-auto border border-gray-200 dark:border-gray-700/50">
+        <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Output</div>
+        <div className="prose prose-sm max-w-none dark:prose-invert text-sm p-4 bg-card/50 rounded-lg max-h-[400px] overflow-y-auto border border-border/50">
           <MemoizedMarkdown text={escapeHtml(output)} />
         </div>
       </div>
@@ -481,7 +483,7 @@ const markdownComponents = {
       // Check if it starts with / (valid relative path for Next.js)
       if (!src.startsWith('/') && !src.startsWith('csv:') && !src.match(/^\/api\/(charts|csvs)\//)) {
         return (
-          <span className="text-xs text-gray-500 italic">
+          <span className="text-xs text-muted-foreground italic">
             [Image: {alt || src}]
           </span>
         );
@@ -516,7 +518,7 @@ const markdownComponents = {
       );
     } catch (error) {
       return (
-        <code className="math-fallback bg-gray-100 px-1 rounded">
+        <code className="math-fallback bg-muted px-1 rounded">
           {mathContent}
         </code>
       );
@@ -524,15 +526,15 @@ const markdownComponents = {
   },
   // Handle academic XML tags commonly found in Wiley content
   note: ({ children }: any) => (
-    <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 pl-4 py-2 my-2 text-sm">
+    <div className="bg-primary/10 border-l-4 border-primary pl-4 py-2 my-2 text-sm">
       <div className="flex items-start gap-2">
-        <span className="text-blue-600 dark:text-blue-400 font-medium">Note:</span>
+        <span className="text-primary font-medium">Note:</span>
         <div>{children}</div>
       </div>
     </div>
   ),
   t: ({ children }: any) => (
-    <span className="font-mono text-sm bg-gray-100 dark:bg-gray-800 px-1 rounded">
+    <span className="font-mono text-sm bg-muted px-1 rounded">
       {children}
     </span>
   ),
@@ -541,17 +543,17 @@ const markdownComponents = {
   ),
   // Handle other common academic tags
   ref: ({ children }: any) => (
-    <span className="text-blue-600 dark:text-blue-400 text-sm">
+    <span className="text-primary text-sm">
       [{children}]
     </span>
   ),
   caption: ({ children }: any) => (
-    <div className="text-sm text-gray-600 dark:text-gray-400 italic text-center my-2">
+    <div className="text-sm text-muted-foreground italic text-center my-2">
       {children}
     </div>
   ),
   figure: ({ children }: any) => (
-    <div className="my-4 p-2 border border-gray-200 dark:border-gray-700 rounded">
+    <div className="my-4 p-2 border border-border rounded">
       {children}
     </div>
   ),
@@ -957,7 +959,7 @@ const extractSearchResults = (jsonOutput: string) => {
     const data = JSON.parse(jsonOutput);
     if (data.results && Array.isArray(data.results)) {
       const mappedResults = data.results.map((result: any, index: number) => ({
-        id: index,
+        id: result.id || index,
         title: result.title || `Result ${index + 1}`,
         summary: result.content
           ? typeof result.content === "string"
@@ -982,6 +984,8 @@ const extractSearchResults = (jsonOutput: string) => {
         length: result.length,
         imageUrls: result.imageUrl || result.image_url || {},
         relevanceScore: result.relevanceScore || result.relevance_score || 0,
+        metadata: result.metadata || {},
+        publication_date: result.publication_date || result.metadata?.date_published,
       }));
 
       // Sort results: structured first, then by relevance score within each category
@@ -1047,7 +1051,7 @@ const SearchResultCard = ({
               {/* Favicon on left */}
               <div className="flex-shrink-0 pt-0.5">
                 {type === "patent" ? (
-                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden p-0.5">
+                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden p-0.5">
                     <img
                       src="/assets/banner/uspto.png"
                       alt="USPTO"
@@ -1055,19 +1059,19 @@ const SearchResultCard = ({
                     />
                   </div>
                 ) : type === "literature" ? (
-                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
-                    <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
+                    <BookOpen className="w-3.5 h-3.5 text-primary" />
                   </div>
                 ) : type === "drug" ? (
-                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
-                    <Search className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
+                    <Search className="w-3.5 h-3.5 text-primary" />
                   </div>
                 ) : type === "clinical" ? (
-                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
-                    <Search className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
+                    <Search className="w-3.5 h-3.5 text-primary" />
                   </div>
                 ) : (
-                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
                     <Favicon
                       url={result.url}
                       size={12}
@@ -1081,16 +1085,16 @@ const SearchResultCard = ({
               <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                 {/* Title and external link */}
                 <div className="flex items-start justify-between gap-2">
-                  <h4 className="font-semibold text-sm leading-tight line-clamp-2 text-gray-900 dark:text-gray-100">
+                  <h4 className="font-semibold text-sm leading-tight line-clamp-2 text-foreground">
                     {result.title}
                   </h4>
-                  <ExternalLink className="h-3 w-3 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
                 </div>
 
                 {/* Markdown preview with separator */}
                 <div className="flex flex-col gap-1">
-                  <div className="h-px bg-gray-200 dark:bg-gray-800" />
-                  <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-snug">
+                  <div className="h-px bg-border" />
+                  <div className="text-xs text-muted-foreground line-clamp-2 leading-snug">
                     {result.summary?.slice(0, 120) || ''}
                   </div>
                 </div>
@@ -1100,13 +1104,13 @@ const SearchResultCard = ({
                   <span
                     className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                       result.isStructured
-                        ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                        : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                        ? "bg-primary/10 text-primary"
+                        : "bg-primary/10 text-primary"
                     }`}
                   >
                     {result.dataType}
                   </span>
-                  <span className="text-[10px] text-gray-500 dark:text-gray-500 truncate">
+                  <span className="text-[10px] text-muted-foreground truncate">
                     {(() => {
                       try {
                         const url = new URL(result.url);
@@ -1142,7 +1146,7 @@ const SearchResultCard = ({
               {/* Favicon on left */}
               <div className="flex-shrink-0 pt-0.5">
                 {type === "patent" ? (
-                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden p-0.5">
+                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden p-0.5">
                     <img
                       src="/assets/banner/uspto.png"
                       alt="USPTO"
@@ -1150,19 +1154,19 @@ const SearchResultCard = ({
                     />
                   </div>
                 ) : type === "literature" ? (
-                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
-                    <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
+                    <BookOpen className="w-3.5 h-3.5 text-primary" />
                   </div>
                 ) : type === "drug" ? (
-                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
-                    <Search className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
+                    <Search className="w-3.5 h-3.5 text-primary" />
                   </div>
                 ) : type === "clinical" ? (
-                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
-                    <Search className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
+                    <Search className="w-3.5 h-3.5 text-primary" />
                   </div>
                 ) : (
-                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
                     <Favicon
                       url={result.url}
                       size={12}
@@ -1176,16 +1180,16 @@ const SearchResultCard = ({
               <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                 {/* Title and external link */}
                 <div className="flex items-start justify-between gap-2">
-                  <h4 className="font-semibold text-sm leading-tight line-clamp-2 text-gray-900 dark:text-gray-100">
+                  <h4 className="font-semibold text-sm leading-tight line-clamp-2 text-foreground">
                     {result.title}
                   </h4>
-                  <ExternalLink className="h-3 w-3 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
                 </div>
 
                 {/* Markdown preview with separator */}
                 <div className="flex flex-col gap-1">
-                  <div className="h-px bg-gray-200 dark:bg-gray-800" />
-                  <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-snug">
+                  <div className="h-px bg-border" />
+                  <div className="text-xs text-muted-foreground line-clamp-2 leading-snug">
                     {result.summary?.slice(0, 120) || ''}
                   </div>
                 </div>
@@ -1195,13 +1199,13 @@ const SearchResultCard = ({
                   <span
                     className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                       result.isStructured
-                        ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                        : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                        ? "bg-primary/10 text-primary"
+                        : "bg-primary/10 text-primary"
                     }`}
                   >
                     {result.dataType}
                   </span>
-                  <span className="text-[10px] text-gray-500 dark:text-gray-500 truncate">
+                  <span className="text-[10px] text-muted-foreground truncate">
                     {(() => {
                       try {
                         const urlObj = new URL(result.url);
@@ -1222,17 +1226,17 @@ const SearchResultCard = ({
         <DialogHeader>
           <DialogTitle className=" pr-8">{result.title}</DialogTitle>
           <Separator />
-          <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+          <div className="text-sm text-muted-foreground space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               {/* <span>{result.source}</span> */}
               {result.date && <span>• {result.date}</span>}
               {result.relevanceScore && (
-                <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                <span className="text-xs bg-muted px-2 py-1 rounded">
                   {(result.relevanceScore * 100).toFixed(0)}% relevance
                 </span>
               )}
               {type === "literature" && result.doi && (
-                <span className="text-xs bg-indigo-100 dark:bg-indigo-800/30 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded">
+                <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
                   DOI: {result.doi}
                 </span>
               )}
@@ -1241,12 +1245,12 @@ const SearchResultCard = ({
             {type === "literature" && (result.authors || result.citation) && (
               <div className="space-y-1">
                 {result.authors && result.authors.length > 0 && (
-                  <div className="text-xs text-gray-600 dark:text-gray-400">
+                  <div className="text-xs text-muted-foreground">
                     <span className="font-medium">Authors:</span> {result.authors.join(", ")}
                   </div>
                 )}
                 {result.citation && (
-                  <div className="text-xs text-gray-600 dark:text-gray-400 font-mono bg-gray-50 dark:bg-gray-800 p-1 rounded">
+                  <div className="text-xs text-muted-foreground font-mono bg-muted p-1 rounded">
                     {result.citation}
                   </div>
                 )}
@@ -1258,7 +1262,7 @@ const SearchResultCard = ({
                 href={result.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                className="inline-flex items-center gap-1 text-primary hover:text-primary"
               >
                 <Favicon
                   url={result.url}
@@ -1277,10 +1281,10 @@ const SearchResultCard = ({
             // Structured data - show as formatted JSON
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <FileText className="h-4 w-4" />
                   Structured Data
-                  <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
                     {result.dataType}
                   </span>
                 </div>
@@ -1294,13 +1298,13 @@ const SearchResultCard = ({
                         : result.fullContent;
                     copyToClipboard(jsonData);
                   }}
-                  className="h-8 px-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  className="h-8 px-3 text-muted-foreground hover:text-foreground"
                 >
                   <Clipboard className="h-3 w-3 mr-1" />
                   Copy JSON
                 </Button>
               </div>
-              <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div className="bg-muted border border-border rounded-lg overflow-hidden">
                 <JsonView
                   value={(() => {
                     try {
@@ -1343,14 +1347,14 @@ const SearchResultCard = ({
           ) : (
             // Unstructured data - show as markdown
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <FileText className="h-4 w-4" />
                 Content
-                <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-1 rounded">
+                <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
                   {result.dataType}
                 </span>
                 {result.length && (
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-muted-foreground">
                     {result.length.toLocaleString()} chars
                   </span>
                 )}
@@ -1377,18 +1381,23 @@ const SearchResultCard = ({
 };
 
 // Search Results Carousel Component
-const SearchResultsCarousel = ({
+const SearchResultsCarousel = memo(function SearchResultsCarousel({
   results,
   type,
 }: {
   results: any[];
   type: "clinical" | "drug" | "literature" | "web" | "patent";
-}) => {
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const imagesScrollRef = useRef<HTMLDivElement>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showAllImages, setShowAllImages] = useState(false);
+  const [selectedPatent, setSelectedPatent] = useState<any>(null);
+
+  const handlePatentClick = useCallback((result: any) => {
+    setSelectedPatent(result);
+  }, []);
 
   // Extract all images from results
   const allImages: { url: string; title: string; sourceUrl: string }[] = [];
@@ -1445,7 +1454,7 @@ const SearchResultsCarousel = ({
 
   if (results.length === 0) {
     return (
-      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+      <div className="text-center py-4 text-muted-foreground">
         No results found
       </div>
     );
@@ -1455,21 +1464,61 @@ const SearchResultsCarousel = ({
     <div className="space-y-4">
       {/* Search Results Carousel */}
       <div className="relative">
-        <div
-          ref={scrollRef}
-          className="flex gap-2 sm:gap-3 overflow-x-auto scrollbar-hide py-1 sm:py-2 px-1 sm:px-2"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-        >
-          {results.map((result) => (
-            <SearchResultCard key={result.id} result={result} type={type} />
-          ))}
-        </div>
+        {type === "patent" ? (
+          // Patent cards grid for patent results
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 px-2">
+            {results.map((result) => (
+              <PatentCard
+                key={result.id}
+                patent={{
+                  id: result.id,
+                  title: result.title,
+                  url: result.url,
+                  content: result.fullContent || result.content || '',
+                  publication_date: result.publication_date,
+                  metadata: result.metadata,
+                  relevance_score: result.relevance_score,
+                }}
+                onClick={() => handlePatentClick(result)}
+              />
+            ))}
+          </div>
+        ) : (
+          // Original horizontal carousel for other result types
+          <div
+            ref={scrollRef}
+            className="flex gap-2 sm:gap-3 overflow-x-auto scrollbar-hide py-1 sm:py-2 px-1 sm:px-2"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          >
+            {results.map((result) => (
+              <SearchResultCard key={result.id} result={result} type={type} />
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Patent Details Panel - Shows when a patent is selected */}
+      {type === "patent" && selectedPatent && (
+        <div className="fixed inset-y-0 right-0 w-[500px] bg-card border-l border-border shadow-2xl z-50 animate-in slide-in-from-right duration-300">
+          <PatentDetailsPanel
+            patent={{
+              id: selectedPatent.id,
+              title: selectedPatent.title,
+              url: selectedPatent.url,
+              content: selectedPatent.fullContent || selectedPatent.content || '',
+              publication_date: selectedPatent.publication_date,
+              metadata: selectedPatent.metadata,
+              relevance_score: selectedPatent.relevance_score,
+            }}
+            onClose={() => setSelectedPatent(null)}
+          />
+        </div>
+      )}
 
       {/* Images Carousel - Only show if there are images */}
       {allImages.length > 0 && (
         <div className="relative">
-          <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 px-2">
+          <div className="text-sm font-medium text-foreground mb-2 px-2">
             Related Images
           </div>
           <div
@@ -1487,7 +1536,7 @@ const SearchResultsCarousel = ({
                   handleImageClick(realIndex);
                 }}
               >
-                <div className="relative overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all">
+                <div className="relative overflow-hidden rounded-lg border border-border hover:border-border transition-all">
                   <Image
                     src={image.url}
                     width={200}
@@ -1515,7 +1564,7 @@ const SearchResultsCarousel = ({
               >
                 <button
                   onClick={() => setShowAllImages(!showAllImages)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground bg-muted hover:bg-muted rounded-lg transition-colors"
                 >
                   {showAllImages ? (
                     <>Show less</>
@@ -1614,11 +1663,11 @@ const SearchResultsCarousel = ({
                     href={allImages[selectedIndex].sourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-200 underline hover:text-blue-400 text-sm"
+                    className="text-primary/60 underline hover:text-primary text-sm"
                   >
                     View Source
                   </a>
-                  <div className="text-xs text-gray-300 mt-2">
+                  <div className="text-xs text-muted-foreground mt-2">
                     {selectedIndex + 1} / {allImages.length}
                   </div>
                 </div>
@@ -1629,7 +1678,7 @@ const SearchResultsCarousel = ({
       )}
     </div>
   );
-};
+});
 
 export function ChatInterface({
   sessionId,
@@ -2758,7 +2807,7 @@ export function ChatInterface({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1, duration: 0.5 }}
                 >
-                  <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Try these capabilities
                   </h3>
                 </motion.div>
@@ -2770,16 +2819,16 @@ export function ChatInterface({
                         "Find patents similar to a machine learning system that uses transformer neural networks for drug discovery. Search for prior art covering attention mechanisms, molecular representation learning, and protein-ligand binding prediction. Create a CSV with patent numbers, assignees, filing dates, and relevance scores."
                       )
                     }
-                    className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
+                    className="bg-muted/50 p-2.5 sm:p-4 rounded-xl border border-border hover:border-primary transition-colors hover:bg-muted text-left group"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3, duration: 0.5 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
+                    <div className="text-foreground mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-foreground">
                       🔍 Prior Art Search
                     </div>
-                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                    <div className="text-[10px] sm:text-xs text-muted-foreground">
                       ML patents for drug discovery
                     </div>
                   </motion.button>
@@ -2790,16 +2839,16 @@ export function ChatInterface({
                         "Analyze Google's patent portfolio in artificial intelligence filed from 2020-2024. Show filing trends over time, identify top CPC classifications, and compare with Microsoft's AI patent activity. Create visualizations showing: 1) Filing trends by year, 2) Technology focus areas, 3) Top inventors and their specializations."
                       )
                     }
-                    className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
+                    className="bg-muted/50 p-2.5 sm:p-4 rounded-xl border border-border hover:border-primary transition-colors hover:bg-muted text-left group"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.4, duration: 0.5 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
+                    <div className="text-foreground mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-foreground">
                       📊 Portfolio Analysis
                     </div>
-                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                    <div className="text-[10px] sm:text-xs text-muted-foreground">
                       Google vs Microsoft AI patents
                     </div>
                   </motion.button>
@@ -2810,16 +2859,16 @@ export function ChatInterface({
                         "Conduct a freedom-to-operate analysis for CRISPR gene editing in therapeutic applications. Search for active patents covering Cas9 systems, guide RNA design, and delivery methods. Identify blocking patents owned by Broad Institute, UC Berkeley, and Editas Medicine. Generate a risk assessment matrix with patent numbers, claim coverage, and expiration dates."
                       )
                     }
-                    className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
+                    className="bg-muted/50 p-2.5 sm:p-4 rounded-xl border border-border hover:border-primary transition-colors hover:bg-muted text-left group"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5, duration: 0.5 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
+                    <div className="text-foreground mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-foreground">
                       ⚖️ Freedom-to-Operate
                     </div>
-                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                    <div className="text-[10px] sm:text-xs text-muted-foreground">
                       CRISPR patent landscape & FTO
                     </div>
                   </motion.button>
@@ -2830,16 +2879,16 @@ export function ChatInterface({
                         "Find all patents filed by Tesla in battery technology from 2015-2024. Focus on solid-state batteries, lithium-sulfur chemistry, and battery management systems. Create a CSV with: patent numbers, titles, filing dates, current status, and key claims. Identify which patents cover the 4680 battery cell design."
                       )
                     }
-                    className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
+                    className="bg-muted/50 p-2.5 sm:p-4 rounded-xl border border-border hover:border-primary transition-colors hover:bg-muted text-left group"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.6, duration: 0.5 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
+                    <div className="text-foreground mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-foreground">
                       🔋 Competitive Intel
                     </div>
-                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                    <div className="text-[10px] sm:text-xs text-muted-foreground">
                       Tesla battery patent portfolio
                     </div>
                   </motion.button>
@@ -2850,16 +2899,16 @@ export function ChatInterface({
                         "Compare patent portfolios of OpenAI, Anthropic, and Google DeepMind in large language models. Analyze filing trends, citation networks, and technology focus areas. Create visualizations showing: 1) Patent filing velocity 2020-2024, 2) Citation impact scores, 3) Technology clustering (training methods, inference optimization, safety techniques). Use Python to calculate portfolio strength metrics."
                       )
                     }
-                    className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
+                    className="bg-muted/50 p-2.5 sm:p-4 rounded-xl border border-border hover:border-primary transition-colors hover:bg-muted text-left group"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.7, duration: 0.5 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
+                    <div className="text-foreground mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-foreground">
                       🤖 LLM Landscape
                     </div>
-                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                    <div className="text-[10px] sm:text-xs text-muted-foreground">
                       OpenAI vs Anthropic vs DeepMind
                     </div>
                   </motion.button>
@@ -2870,16 +2919,16 @@ export function ChatInterface({
                         "Search for invalidating prior art for US Patent 11,234,567 covering a 'method for real-time object detection using convolutional neural networks.' Find patents and publications from before the 2018 priority date that disclose: CNN architectures for object detection, real-time inference optimization, and mobile deployment. Create a comprehensive claim chart mapping prior art elements to each claim limitation. Identify the strongest anticipation and obviousness arguments."
                       )
                     }
-                    className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 p-2.5 sm:p-4 rounded-xl border border-blue-200 dark:border-blue-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/30 dark:hover:to-purple-900/30 text-left group col-span-1 sm:col-span-2 lg:col-span-1"
+                    className="bg-primary/10 p-2.5 sm:p-4 rounded-xl border border-primary hover:border-primary transition-colors hover:bg-primary/15 text-left group col-span-1 sm:col-span-2 lg:col-span-1"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.8, duration: 0.5 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    <div className="text-blue-700 dark:text-blue-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-blue-900 dark:group-hover:text-blue-100">
+                    <div className="text-primary mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-primary">
                       🚀 Invalidation Search
                     </div>
-                    <div className="text-[10px] sm:text-xs text-blue-600 dark:text-blue-400">
+                    <div className="text-[10px] sm:text-xs text-primary/80">
                       Prior art + Claim chart + Litigation support
                     </div>
                   </motion.button>
@@ -2910,12 +2959,12 @@ export function ChatInterface({
               )}
 
               <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
-                <div className="relative flex items-end">
+                <div className="bg-card rounded-2xl shadow-sm border border-border px-4 py-2.5 relative flex items-center">
                   <Textarea
                     value={input}
                     onChange={handleInputChange}
                     placeholder="Ask a question..."
-                    className="w-full resize-none rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 pr-14 sm:pr-16 min-h-[38px] sm:min-h-[40px] max-h-28 sm:max-h-32 overflow-y-auto text-sm sm:text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 focus:border-gray-400 dark:focus:border-gray-600 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-sm"
+                    className="w-full resize-none border-0 px-0 py-2 pr-12 min-h-[36px] max-h-24 focus:ring-0 focus-visible:ring-0 bg-transparent overflow-y-auto text-base placeholder:text-muted-foreground shadow-none scrollbar-hide"
                     disabled={status === "error" || isLoading}
                     rows={1}
                     style={{ lineHeight: "1.5" }}
@@ -2933,15 +2982,15 @@ export function ChatInterface({
                       !canStop &&
                       (isLoading || !input.trim() || status === "error")
                     }
-                    className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 rounded-xl h-7 w-7 sm:h-8 sm:w-8 p-0 bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-gray-200 dark:text-gray-900"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl h-8 w-8 p-0 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-colors"
                   >
                     {canStop ? (
-                      <Square className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <Square className="h-4 w-4" />
                     ) : isLoading ? (
-                      <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <svg
-                        className="h-3.5 w-3.5 sm:h-4 sm:w-4"
+                        className="h-4 w-4"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -2965,7 +3014,7 @@ export function ChatInterface({
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.1, duration: 0.5 }}
               >
-                <span className="text-xs text-gray-400 dark:text-gray-500">
+                <span className="text-xs text-muted-foreground">
                   Powered by
                 </span>
                 <a
@@ -3010,14 +3059,14 @@ export function ChatInterface({
               {message.role === "user" ? (
                 /* User Message */
                 <div className="flex justify-end mb-4 sm:mb-6 px-3 sm:px-0">
-                  <div className="max-w-[85%] sm:max-w-[80%] bg-gray-100 dark:bg-gray-800 rounded-2xl px-4 sm:px-4 py-3 sm:py-3 relative group shadow-sm">
+                  <div className="max-w-[85%] sm:max-w-[80%] bg-muted rounded-2xl px-4 sm:px-4 py-3 sm:py-3 relative group shadow-sm">
                     {/* User Message Actions */}
                     <div className="absolute -left-8 sm:-left-10 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 sm:gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleEditMessage(message.id)}
-                        className="h-6 w-6 p-0 bg-white dark:bg-gray-900 rounded-full shadow-sm border border-gray-200 dark:border-gray-700"
+                        className="h-6 w-6 p-0 bg-card rounded-full shadow-sm border border-border"
                       >
                         <Edit3 className="h-3 w-3" />
                       </Button>
@@ -3025,7 +3074,7 @@ export function ChatInterface({
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteMessage(message.id)}
-                        className="h-6 w-6 p-0 bg-white dark:bg-gray-900 rounded-full shadow-sm border border-gray-200 dark:border-gray-700 text-red-500 hover:text-red-700"
+                        className="h-6 w-6 p-0 bg-card rounded-full shadow-sm border border-border text-destructive hover:text-destructive"
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -3036,7 +3085,7 @@ export function ChatInterface({
                         <Textarea
                           value={editingText}
                           onChange={(e) => setEditingText(e.target.value)}
-                          className="min-h-[80px] border-gray-200 dark:border-gray-600 rounded-xl"
+                          className="min-h-[80px] border-border rounded-xl"
                         />
                         <div className="flex gap-2">
                           <Button
@@ -3058,7 +3107,7 @@ export function ChatInterface({
                         </div>
                       </div>
                     ) : (
-                      <div className="text-gray-900 dark:text-gray-100">
+                      <div className="text-foreground">
                         {message.parts.find((p) => p.type === "text")?.text}
                       </div>
                     )}
@@ -3129,7 +3178,7 @@ export function ChatInterface({
                             } else {
                               latestStepTitle = "Thinking...";
                             }
-                            latestStepIcon = <Brain className="h-5 w-5 text-purple-500" />;
+                            latestStepIcon = <Brain className="h-5 w-5 text-primary" />;
                           } else if (latestStep.part?.type?.startsWith("tool-")) {
                             // Get tool name and details
                             const toolType = latestStep.part.type.replace("tool-", "");
@@ -3137,35 +3186,35 @@ export function ChatInterface({
                             if (toolType === "patentSearch") {
                               latestStepTitle = "Patent Search";
                               latestStepSubtitle = latestStep.part.input?.query || "...";
-                              latestStepIcon = <Search className="h-5 w-5 text-blue-600" />;
+                              latestStepIcon = <Search className="h-5 w-5 text-primary" />;
                             } else if (toolType === "clinicalTrialsSearch") {
                               latestStepTitle = "Clinical Trials";
                               latestStepSubtitle = latestStep.part.input?.query || "...";
-                              latestStepIcon = <Search className="h-5 w-5 text-blue-500" />;
+                              latestStepIcon = <Search className="h-5 w-5 text-primary" />;
                             } else if (toolType === "drugInformationSearch") {
                               latestStepTitle = "Drug Information";
                               latestStepSubtitle = latestStep.part.input?.query || "...";
-                              latestStepIcon = <Search className="h-5 w-5 text-purple-500" />;
+                              latestStepIcon = <Search className="h-5 w-5 text-primary" />;
                             } else if (toolType === "biomedicalLiteratureSearch") {
                               latestStepTitle = "Literature Search";
                               latestStepSubtitle = latestStep.part.input?.query || "...";
-                              latestStepIcon = <BookOpen className="h-5 w-5 text-indigo-500" />;
+                              latestStepIcon = <BookOpen className="h-5 w-5 text-primary" />;
                             } else if (toolType === "webSearch") {
                               latestStepTitle = "Web Search";
                               latestStepSubtitle = latestStep.part.input?.query || "...";
-                              latestStepIcon = <Globe className="h-5 w-5 text-green-500" />;
+                              latestStepIcon = <Globe className="h-5 w-5 text-primary" />;
                             } else if (toolType === "codeExecution") {
                               latestStepTitle = "Code Execution";
                               latestStepSubtitle = latestStep.part.input?.description || "Running Python code";
-                              latestStepIcon = <Code2 className="h-5 w-5 text-orange-500" />;
+                              latestStepIcon = <Code2 className="h-5 w-5 text-primary" />;
                             } else if (toolType === "createChart") {
                               latestStepTitle = "Creating Chart";
                               latestStepSubtitle = latestStep.part.output?.title || "Generating visualization";
-                              latestStepIcon = <BarChart3 className="h-5 w-5 text-cyan-500" />;
+                              latestStepIcon = <BarChart3 className="h-5 w-5 text-primary" />;
                             } else if (toolType === "createCSV") {
                               latestStepTitle = "Creating Table";
                               latestStepSubtitle = latestStep.part.output?.title || "Generating CSV data";
-                              latestStepIcon = <Table className="h-5 w-5 text-teal-500" />;
+                              latestStepIcon = <Table className="h-5 w-5 text-primary" />;
                             } else {
                               latestStepTitle = toolType;
                               latestStepSubtitle = "";
@@ -3191,16 +3240,16 @@ export function ChatInterface({
                             {hasActivity && (
                               <button
                                 onClick={() => setIsTraceExpanded(!isTraceExpanded)}
-                                className="w-full flex items-start gap-4 px-4 py-4 bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-900/30 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all mb-4 text-left group"
+                                className="w-full flex items-start gap-4 px-4 py-4 bg-gradient-to-br from-muted to-muted rounded-xl border border-border hover:border-border hover:shadow-sm transition-all mb-4 text-left group"
                               >
                                 {/* Icon */}
                                 <div className="flex-shrink-0 mt-0.5">
                                   {messageIsComplete ? (
-                                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center">
-                                      <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
+                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                      <Check className="h-5 w-5 text-primary" />
                                     </div>
                                   ) : (
-                                    <div className="w-10 h-10 rounded-lg bg-blue-500/10 dark:bg-blue-500/20 flex items-center justify-center">
+                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                                       {latestStepIcon}
                                     </div>
                                   )}
@@ -3210,27 +3259,27 @@ export function ChatInterface({
                                 <div className="flex-1 min-w-0">
                                   {messageIsComplete ? (
                                     <>
-                                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                                      <div className="text-sm font-semibold text-foreground mb-1">
                                         Completed
                                       </div>
-                                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                                      <div className="text-sm text-muted-foreground">
                                         Performed {totalActions} {totalActions === 1 ? 'action' : 'actions'}
                                       </div>
                                     </>
                                   ) : (
                                     <>
                                       <div className="flex items-center gap-2 mb-1">
-                                        <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                        <div className="text-sm font-semibold text-foreground">
                                           {latestStepTitle || "Working..."}
                                         </div>
                                         <div className="flex items-center gap-1">
-                                          <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse" />
-                                          <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                                          <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                                          <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
+                                          <div className="w-1 h-1 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                                          <div className="w-1 h-1 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
                                         </div>
                                       </div>
                                       {latestStepSubtitle && (
-                                        <div className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                                        <div className="text-sm text-muted-foreground line-clamp-2">
                                           {latestStepSubtitle}
                                         </div>
                                       )}
@@ -3239,7 +3288,7 @@ export function ChatInterface({
                                 </div>
 
                                 {/* Expand button */}
-                                <div className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors mt-1">
+                                <div className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors mt-1">
                                   <span className="hidden sm:inline">
                                     {isTraceExpanded ? 'Hide' : 'Show'}
                                   </span>
@@ -3432,12 +3481,12 @@ export function ChatInterface({
                                 if (!isStreaming && trialsResults.length > 0) {
                                   subtitleContent = (
                                     <div className="flex flex-col gap-1">
-                                      <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
+                                      <div className="text-xs text-muted-foreground">{query}</div>
                                       <div className="flex items-center gap-2">
-                                        <div className="w-5 h-5 rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 flex items-center justify-center overflow-hidden">
+                                        <div className="w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
                                           <Favicon url={faviconUrl} size={12} className="w-3 h-3" />
                                         </div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                                        <span className="text-xs text-muted-foreground">
                                           {trialsResults.length} results
                                         </span>
                                       </div>
@@ -3450,29 +3499,29 @@ export function ChatInterface({
                                     <div className="group relative py-0.5 animate-in fade-in duration-200">
                                       <div
                                         className={`relative flex items-start gap-4 py-4 px-4 -mx-2 rounded-md transition-all duration-150 ${
-                                          isStreaming ? 'bg-blue-50/50 dark:bg-blue-950/10' : ''
+                                          isStreaming ? 'bg-primary/5' : ''
                                         } ${
-                                          hasResults ? 'hover:bg-gray-50 dark:hover:bg-white/[0.02] cursor-pointer' : ''
+                                          hasResults ? 'hover:bg-muted dark:hover:bg-card/[0.02] cursor-pointer' : ''
                                         }`}
                                         onClick={hasResults ? () => toggleToolExpansion(`step-search-${message.id}-${index}`) : undefined}
                                       >
                                         {/* Status indicator */}
                                         <div className="flex-shrink-0">
                                           {!isStreaming ? (
-                                            <div className="w-4 h-4 rounded-full bg-emerald-500/15 dark:bg-emerald-500/25 flex items-center justify-center">
-                                              <Check className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-500 stroke-[2.5]" />
+                                            <div className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center">
+                                              <Check className="w-2.5 h-2.5 text-primary stroke-[2.5]" />
                                             </div>
                                           ) : (
                                             <div className="relative w-4 h-4">
-                                              <div className="absolute inset-0 rounded-full border border-blue-300/40 dark:border-blue-700/40" />
-                                              <div className="absolute inset-0 rounded-full border border-transparent border-t-blue-500 dark:border-t-blue-400 animate-spin" />
+                                              <div className="absolute inset-0 rounded-full border border-primary/40" />
+                                              <div className="absolute inset-0 rounded-full border border-transparent border-t-primary animate-spin" />
                                             </div>
                                           )}
                                         </div>
 
                                         {/* Icon */}
                                         <div className={`flex-shrink-0 w-4 h-4 ${
-                                          isStreaming ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'
+                                          isStreaming ? 'text-primary' : 'text-muted-foreground'
                                         }`}>
                                           <Search />
                                         </div>
@@ -3480,17 +3529,17 @@ export function ChatInterface({
                                         {/* Content */}
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-baseline gap-2 mb-1">
-                                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                            <span className="text-sm font-medium text-foreground">
                                               Clinical Trials Search
                                             </span>
                                           </div>
                                           {!isStreaming && trialsResults.length > 0 && subtitleContent}
-                                          {isStreaming && <div className="text-xs text-gray-500 dark:text-gray-500 line-clamp-1 mt-0.5">{query}</div>}
+                                          {isStreaming && <div className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{query}</div>}
                                         </div>
 
                                         {/* Chevron */}
                                         {hasResults && !isStreaming && (
-                                          <ChevronDown className={`h-3.5 w-3.5 text-gray-400 dark:text-gray-600 flex-shrink-0 transition-transform duration-150 ${
+                                          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground flex-shrink-0 transition-transform duration-150 ${
                                             expandedTools.has(`step-search-${message.id}-${index}`) ? 'rotate-180' : ''
                                           }`} />
                                         )}
@@ -3545,20 +3594,20 @@ export function ChatInterface({
                                   const displayResults = webResults.slice(0, 5);
                                   subtitleContent = (
                                     <div className="flex flex-col gap-1">
-                                      <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
+                                      <div className="text-xs text-muted-foreground">{query}</div>
                                       <div className="flex items-center gap-2">
                                         <div className="flex -space-x-2">
                                           {displayResults.map((result: any, idx: number) => (
                                             <div
                                               key={idx}
-                                              className="w-5 h-5 rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 flex items-center justify-center overflow-hidden"
+                                              className="w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden"
                                               style={{ zIndex: 5 - idx }}
                                             >
                                               <Favicon url={result.url} size={12} className="w-3 h-3" />
                                             </div>
                                           ))}
                                         </div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                                        <span className="text-xs text-muted-foreground">
                                           {webResults.length} results
                                         </span>
                                       </div>
@@ -3599,6 +3648,10 @@ export function ChatInterface({
                                 const hasError = part.state === "output-error";
 
                                 if (hasError) {
+                                  const errorMessage = part.errorText?.includes('JSON parsing failed')
+                                    ? 'Search request was interrupted. Please try your query again.'
+                                    : part.errorText;
+
                                   return (
                                     <div key={callId} className="my-1">
                                       <TimelineStep
@@ -3608,7 +3661,7 @@ export function ChatInterface({
                                         status="error"
                                         type="search"
                                         title="Patent Search Error"
-                                        subtitle={part.errorText}
+                                        subtitle={errorMessage}
                                         icon={<AlertCircle />}
                                         expandedTools={expandedTools}
                                         toggleToolExpansion={toggleToolExpansion}
@@ -3627,13 +3680,13 @@ export function ChatInterface({
                                     const displayResults = patentResults.slice(0, 5);
                                     subtitleContent = (
                                       <div className="flex flex-col gap-1">
-                                        <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
+                                        <div className="text-xs text-muted-foreground">{query}</div>
                                         <div className="flex items-center gap-2">
                                           <div className="flex -space-x-2">
                                             {displayResults.map((result: any, idx: number) => (
                                               <div
                                                 key={idx}
-                                                className="w-5 h-5 rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 flex items-center justify-center overflow-hidden p-0.5"
+                                                className="w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden p-0.5"
                                                 style={{ zIndex: 5 - idx }}
                                               >
                                                 <img
@@ -3644,7 +3697,7 @@ export function ChatInterface({
                                               </div>
                                             ))}
                                           </div>
-                                          <span className="text-xs text-gray-600 dark:text-gray-400">
+                                          <span className="text-xs text-muted-foreground">
                                             {patentResults.length} results
                                           </span>
                                         </div>
@@ -3654,8 +3707,8 @@ export function ChatInterface({
                                     // Show 0 results when complete but no results found
                                     subtitleContent = (
                                       <div className="flex flex-col gap-1">
-                                        <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-500">0 results</div>
+                                        <div className="text-xs text-muted-foreground">{query}</div>
+                                        <div className="text-xs text-muted-foreground">0 results</div>
                                       </div>
                                     );
                                   }
@@ -3721,20 +3774,20 @@ export function ChatInterface({
                                   const displayResults = literatureResults.slice(0, 5);
                                   subtitleContent = (
                                     <div className="flex flex-col gap-1">
-                                      <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
+                                      <div className="text-xs text-muted-foreground">{query}</div>
                                       <div className="flex items-center gap-2">
                                         <div className="flex -space-x-2">
                                           {displayResults.map((result: any, idx: number) => (
                                             <div
                                               key={idx}
-                                              className="w-5 h-5 rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 flex items-center justify-center overflow-hidden"
+                                              className="w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden"
                                               style={{ zIndex: 5 - idx }}
                                             >
                                               <Favicon url={result.url} size={12} className="w-3 h-3" />
                                             </div>
                                           ))}
                                         </div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                                        <span className="text-xs text-muted-foreground">
                                           {literatureResults.length} results
                                         </span>
                                       </div>
@@ -3808,12 +3861,12 @@ export function ChatInterface({
                                 if (!isStreaming && drugResults.length > 0) {
                                   subtitleContent = (
                                     <div className="flex flex-col gap-1">
-                                      <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
+                                      <div className="text-xs text-muted-foreground">{query}</div>
                                       <div className="flex items-center gap-2">
-                                        <div className="w-5 h-5 rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 flex items-center justify-center overflow-hidden">
+                                        <div className="w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
                                           <Favicon url={faviconUrl} size={12} className="w-3 h-3" />
                                         </div>
-                                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                                        <span className="text-xs text-muted-foreground">
                                           {drugResults.length} results
                                         </span>
                                       </div>
@@ -3957,27 +4010,27 @@ export function ChatInterface({
                                 return (
                                   <div
                                     key={index}
-                                    className="mt-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded p-2 sm:p-3"
+                                    className="mt-2 bg-primary/10 border border-primary/30 rounded p-2 sm:p-3"
                                   >
-                                    <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 mb-2">
+                                    <div className="flex items-center gap-2 text-primary mb-2">
                                       <Wrench className="h-4 w-4" />
                                       <span className="font-medium">
                                         Tool: {part.toolName}
                                       </span>
                                     </div>
-                                    <div className="text-sm text-purple-600 dark:text-purple-300">
+                                    <div className="text-sm text-primary">
                                       {part.state === "input-streaming" && (
-                                        <pre className="bg-purple-100 dark:bg-purple-800/30 p-2 rounded text-xs">
+                                        <pre className="bg-primary/10 p-2 rounded text-xs">
                                           {JSON.stringify(part.input, null, 2)}
                                         </pre>
                                       )}
                                       {part.state === "output-available" && (
-                                        <pre className="bg-purple-100 dark:bg-purple-800/30 p-2 rounded text-xs">
+                                        <pre className="bg-primary/10 p-2 rounded text-xs">
                                           {JSON.stringify(part.output, null, 2)}
                                         </pre>
                                       )}
                                       {part.state === "output-error" && (
-                                        <div className="text-red-600 dark:text-red-300">
+                                        <div className="text-destructive">
                                           Error: {part.errorText}
                                         </div>
                                       )}
@@ -3998,10 +4051,10 @@ export function ChatInterface({
 
                   {/* Message Actions - Professional Action Bar */}
                   {message.role === "assistant" && !isLoading && (
-                    <div className="flex justify-end gap-2 mt-6 pt-4 mb-8 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex justify-end gap-2 mt-6 pt-4 mb-8 border-t border-border">
                       <button
                         onClick={() => copyToClipboard(getMessageText(message))}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-all"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-all"
                         title="Copy to clipboard"
                       >
                         <Copy className="h-3.5 w-3.5" />
@@ -4015,7 +4068,7 @@ export function ChatInterface({
                           <button
                             onClick={handleDownloadPDF}
                             disabled={isDownloadingPDF}
-                            className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold text-foreground bg-muted hover:bg-muted rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Download full report as PDF"
                           >
                             {isDownloadingPDF ? (
@@ -4033,12 +4086,12 @@ export function ChatInterface({
                         ) : (
                           <button
                             onClick={() => setShowAuthModal(true)}
-                            className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg transition-all hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-600 dark:hover:text-gray-400 group"
+                            className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50 border border-border rounded-lg transition-all hover:border-border hover:text-foreground group"
                             title="Sign in to download reports"
                           >
                             <Download className="h-3.5 w-3.5" />
                             <span>Download Report</span>
-                            <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors">
+                            <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-primary/10 text-primary rounded group-hover:bg-primary/15 transition-colors">
                               Sign in
                             </span>
                           </button>
@@ -4080,11 +4133,11 @@ export function ChatInterface({
                 transition={{ duration: 0.3, ease: "easeOut" }}
               >
                 <div className="flex items-start gap-2">
-                  <div className="text-amber-600 dark:text-amber-400 text-lg mt-0.5">
+                  <div className="text-primary text-lg mt-0.5">
                     ☕
                   </div>
-                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2 max-w-xs">
-                    <div className="text-amber-700 dark:text-amber-300 text-sm">
+                  <div className="bg-primary/10 border border-primary/30 rounded-xl px-3 py-2 max-w-xs">
+                    <div className="text-primary text-sm">
                       Just grabbing a coffee and contemplating the meaning of
                       life... ☕️
                     </div>
@@ -4103,41 +4156,26 @@ export function ChatInterface({
         {(isFormAtBottom || isMobile) && (
           <>
             <motion.div
-              className="fixed left-1/2 -translate-x-1/2 bottom-0 w-full max-w-3xl h-36 pointer-events-none z-45"
+              className="fixed left-1/2 -translate-x-1/2 bottom-0 w-full max-w-3xl h-36 pointer-events-none z-45 bg-gradient-to-t from-background via-background/80 to-transparent"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
-            >
-              <div
-                className="dark:hidden absolute inset-0"
-                style={{
-                  background:
-                    "linear-gradient(to top, rgb(245,245,245) 0%, rgba(245,245,245,0.98) 30%, rgba(245,245,245,0.8) 60%, rgba(245,245,245,0) 100%)",
-                }}
-              />
-              <div
-                className="hidden dark:block absolute inset-0"
-                style={{
-                  background:
-                    "linear-gradient(to top, rgb(3 7 18) 0%, rgb(3 7 18 / 0.98) 30%, rgb(3 7 18 / 0.8) 60%, transparent 100%)",
-                }}
-              />
-            </motion.div>
+            />
           </>
         )}
       </AnimatePresence>
       
       {/* Error Display */}
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 sm:p-4">
-          <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
+        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 sm:p-4">
+          <div className="flex items-center gap-2 text-destructive">
             <AlertCircle className="h-4 w-4" />
             <span className="font-medium">
               {error.message?.includes('PAYMENT_REQUIRED') ? 'Payment Setup Required' : 'Something went wrong'}
             </span>
           </div>
-          <p className="text-red-600 dark:text-red-400 text-sm mt-1">
+          <p className="text-destructive text-sm mt-1">
             {error.message?.includes('PAYMENT_REQUIRED') 
               ? 'You need to set up a payment method to use the pay-per-use plan. You only pay for what you use.'
               : 'Please check your API keys and try again.'
@@ -4155,7 +4193,7 @@ export function ChatInterface({
             }}
             variant="outline"
             size="sm"
-            className="mt-2 text-red-700 border-red-300 hover:bg-red-100 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
+            className="mt-2 text-destructive border-destructive/30 hover:bg-destructive/10"
           >
             {error.message?.includes('PAYMENT_REQUIRED') ? (
               <>
@@ -4190,12 +4228,12 @@ export function ChatInterface({
             )}
 
             <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 px-4 py-2.5 relative flex items-center">
+              <div className="bg-card rounded-2xl shadow-sm border border-border px-4 py-2.5 relative flex items-center">
                 <Textarea
                   value={input}
                   onChange={handleInputChange}
                   placeholder="Ask a question..."
-                  className="w-full resize-none border-0 px-0 py-2 pr-12 min-h-[36px] max-h-24 focus:ring-0 focus-visible:ring-0 bg-transparent overflow-y-auto text-base placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-none"
+                  className="w-full resize-none border-0 px-0 py-2 pr-12 min-h-[36px] max-h-24 focus:ring-0 focus-visible:ring-0 bg-transparent overflow-y-auto text-base placeholder:text-muted-foreground shadow-none scrollbar-hide"
                   disabled={status === "error" || isLoading}
                   rows={1}
                   style={{ lineHeight: "1.5", paddingTop: "0.5rem", paddingBottom: "0.5rem" }}
@@ -4213,7 +4251,7 @@ export function ChatInterface({
                     !canStop &&
                     (isLoading || !input.trim() || status === "error")
                   }
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl h-8 w-8 p-0 bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-gray-200 dark:text-gray-900 shadow-sm transition-colors"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl h-8 w-8 p-0 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-colors"
                 >
                     {canStop ? (
                       <Square className="h-4 w-4" />
@@ -4240,7 +4278,7 @@ export function ChatInterface({
 
             {/* Mobile Bottom Bar - Social links and disclaimer below input */}
             <motion.div 
-              className="block sm:hidden mt-4 pt-3 border-t border-gray-200 dark:border-gray-700"
+              className="block sm:hidden mt-4 pt-3 border-t border-border"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5, duration: 0.3 }}
@@ -4249,7 +4287,7 @@ export function ChatInterface({
                 <div className="flex items-center justify-center space-x-4">
                   <SocialLinks />
                 </div>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center">
+                <p className="text-[10px] text-muted-foreground text-center">
                   Not financial advice.
                 </p>
               </div>
@@ -4271,10 +4309,10 @@ export function ChatInterface({
       <Dialog open={showSignupPrompt} onOpenChange={setShowSignupPrompt}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            <DialogTitle className="text-lg font-semibold text-foreground">
               Sign up to save your chat
             </DialogTitle>
-            <DialogDescription className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+            <DialogDescription className="text-sm text-muted-foreground mt-2">
               Create a free account to save your chat history and access it anytime.
             </DialogDescription>
           </DialogHeader>
@@ -4284,7 +4322,7 @@ export function ChatInterface({
                 setShowSignupPrompt(false);
                 setShowAuthModal(true);
               }}
-              className="w-full px-4 py-2.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 font-medium rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-all"
+              className="w-full px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-all"
             >
               Sign up (free)
             </button>
@@ -4294,7 +4332,7 @@ export function ChatInterface({
                 // Submit with skip flag to bypass the signup prompt
                 handleSubmit(e as any, true);
               }}
-              className="w-full px-4 py-2.5 bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+              className="w-full px-4 py-2.5 bg-transparent border border-border text-foreground font-medium rounded-lg hover:bg-muted transition-all"
             >
               Continue without account
             </button>

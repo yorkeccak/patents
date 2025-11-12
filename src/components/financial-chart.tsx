@@ -324,25 +324,25 @@ function BiomedicalChartComponent({
                 if (active && payload && payload.length) {
                   const data = payload[0].payload;
                   return (
-                    <div className="rounded-lg border bg-white/98 p-3 shadow-lg">
+                    <div className="rounded-lg border bg-card/98 p-3 shadow-lg">
                       <div className="text-sm font-semibold mb-2">{data.label || data.name}</div>
                       <div className="space-y-1 text-xs">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: data.fill }} />
-                          <span className="text-gray-600">Category:</span>
+                          <span className="text-muted-foreground">Category:</span>
                           <span className="font-medium">{data.category}</span>
                         </div>
                         <div className="flex justify-between gap-4">
-                          <span className="text-gray-600">{xAxisLabel}:</span>
+                          <span className="text-muted-foreground">{xAxisLabel}:</span>
                           <span className="font-medium">{Number(data.x).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between gap-4">
-                          <span className="text-gray-600">{yAxisLabel}:</span>
+                          <span className="text-muted-foreground">{yAxisLabel}:</span>
                           <span className="font-medium">{(data.y ?? 0).toFixed(2)}</span>
                         </div>
                         {data.z && (
                           <div className="flex justify-between gap-4">
-                            <span className="text-gray-600">Size:</span>
+                            <span className="text-muted-foreground">Size:</span>
                             <span className="font-medium">{data.z.toLocaleString()}</span>
                           </div>
                         )}
@@ -435,17 +435,17 @@ function BiomedicalChartComponent({
 
   return (
     <div className="w-full">
-      <div ref={chartRef} className="w-full bg-gradient-to-br from-white to-gray-50/30 dark:from-gray-900 dark:to-gray-900/80 rounded-xl border border-gray-200/80 dark:border-gray-700/50 overflow-hidden shadow-sm">
+      <div ref={chartRef} className="w-full bg-gradient-to-br from-background to-background rounded-xl border border-border overflow-hidden shadow-sm">
         {/* Elegant Header */}
-        <div className="px-6 pt-5 pb-4 border-b border-gray-200/60 dark:border-gray-700/50">
+        <div className="px-6 pt-5 pb-4 border-b border-border">
           <div className="flex gap-4 items-start justify-between">
             {/* Left: Title + Description */}
             <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1.5">
+              <h3 className="text-lg font-semibold text-foreground mb-1.5">
                 {title}
               </h3>
               {description && (
-                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   {description}
                 </p>
               )}
@@ -453,14 +453,14 @@ function BiomedicalChartComponent({
               {/* Metadata Badges - Refined */}
               {metadata && (
                 <div className="flex flex-wrap gap-1.5 mt-2.5">
-                  <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                  <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-md bg-muted text-foreground">
                     {metadata.totalSeries} {metadata.totalSeries === 1 ? 'Series' : 'Series'}
                   </span>
-                  <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                  <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-md bg-muted text-foreground">
                     {metadata.totalDataPoints} Points
                   </span>
                   {metadata.dateRange && (
-                    <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                    <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-md bg-muted text-foreground">
                       {metadata.dateRange.start} → {metadata.dateRange.end}
                     </span>
                   )}
@@ -497,12 +497,12 @@ function BiomedicalChartComponent({
           <button
             onClick={handleDownload}
             disabled={isDownloading}
-            className="w-full py-2 px-4 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700
-                       border border-gray-200 dark:border-gray-700 transition-colors
+            className="w-full py-2 px-4 rounded-lg bg-muted hover:bg-muted
+                       border border-border transition-colors
                        disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            <Download className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400" />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <Download className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">
               {isDownloading ? 'Downloading...' : 'Download Chart'}
             </span>
           </button>

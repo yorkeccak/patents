@@ -83,32 +83,32 @@ export function TimeSavedBreakdownDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!max-w-4xl !max-h-[85vh] overflow-hidden">
         {/* Header */}
-        <div className="pb-3 border-b border-gray-200 dark:border-gray-800">
-          <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <div className="pb-3 border-b border-border">
+          <DialogTitle className="text-lg font-semibold text-foreground">
             Patent Workflow Analysis
           </DialogTitle>
         </div>
 
         {/* Summary Stats */}
         <div className="grid grid-cols-2 gap-3 py-3">
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+          <div className="bg-gradient-to-br from-primary/10 to-primary/10 border border-primary/30 rounded-lg p-3">
             <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <div className="text-xs font-semibold text-blue-900 dark:text-blue-300">Time Saved</div>
+              <Clock className="w-4 h-4 text-primary" />
+              <div className="text-xs font-semibold text-primary">Time Saved</div>
             </div>
-            <div className="text-2xl font-bold text-blue-950 dark:text-blue-100">{formatTime(timeSavedMinutes)}</div>
-            <div className="text-[10px] text-blue-700 dark:text-blue-400 mt-0.5">
+            <div className="text-2xl font-bold text-primary">{formatTime(timeSavedMinutes)}</div>
+            <div className="text-[10px] text-primary mt-0.5">
               {billableDays.toFixed(1)} billable days
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3">
+          <div className="bg-gradient-to-br from-primary/10 to-primary/10 border border-primary/30 rounded-lg p-3">
             <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <div className="text-xs font-semibold text-emerald-900 dark:text-emerald-300">Cost Savings</div>
+              <DollarSign className="w-4 h-4 text-primary" />
+              <div className="text-xs font-semibold text-primary">Cost Savings</div>
             </div>
-            <div className="text-2xl font-bold text-emerald-950 dark:text-emerald-100">{formatCost(moneySaved)}</div>
-            <div className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+            <div className="text-2xl font-bold text-primary">{formatCost(moneySaved)}</div>
+            <div className="text-[10px] text-primary mt-0.5">
               At $550/hr blended rate
             </div>
           </div>
@@ -159,18 +159,18 @@ export function TimeSavedBreakdownDialog({
             <div className="flex flex-col justify-center min-w-[120px]">
               {activeIndex !== undefined && allTasks[activeIndex].minutes > 0 ? (
                 <>
-                  <div className="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                  <div className="text-xs font-semibold text-foreground mb-1">
                     {allTasks[activeIndex].name}
                   </div>
-                  <div className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">
+                  <div className="text-2xl font-bold text-foreground mb-1">
                     {formatTime(allTasks[activeIndex].minutes)}
                   </div>
-                  <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                  <div className="text-[10px] text-muted-foreground">
                     {((allTasks[activeIndex].minutes / timeSavedMinutes) * 100).toFixed(1)}% of total
                   </div>
                 </>
               ) : (
-                <div className="text-xs text-gray-400 dark:text-gray-500">
+                <div className="text-xs text-muted-foreground">
                   Hover to see details
                 </div>
               )}
@@ -193,18 +193,18 @@ export function TimeSavedBreakdownDialog({
                   onMouseEnter={() => setActiveIndex(idx)}
                   onMouseLeave={() => setActiveIndex(undefined)}
                   className={`flex items-center gap-1.5 p-1.5 rounded transition-all cursor-pointer ${
-                    isActive ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                    isActive ? 'bg-muted' : 'hover:bg-muted/50'
                   }`}
                 >
                   <div
                     className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
                     style={{ backgroundColor: taskColor }}
                   />
-                  <Icon className="w-3 h-3 text-gray-600 dark:text-gray-400" />
-                  <div className="flex-1 min-w-0 text-[11px] font-medium text-gray-900 dark:text-gray-100 truncate">
+                  <Icon className="w-3 h-3 text-muted-foreground" />
+                  <div className="flex-1 min-w-0 text-[11px] font-medium text-foreground truncate">
                     {task.name}
                   </div>
-                  <span className="text-[11px] font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
+                  <span className="text-[11px] font-semibold text-foreground tabular-nums">
                     {formatTime(task.minutes)}
                   </span>
                 </div>
@@ -214,42 +214,42 @@ export function TimeSavedBreakdownDialog({
         </div>
 
         {/* Competitive Pricing - Much more compact */}
-        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
-          <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+        <div className="mt-3 pt-3 border-t border-border">
+          <div className="text-xs font-semibold text-foreground mb-2">
             Industry Benchmark Costs
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {/* Per-Search Costs */}
             <div>
-              <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">Per Search</div>
+              <div className="text-[10px] font-medium text-muted-foreground mb-1.5">Per Search</div>
               <div className="space-y-1.5">
-                <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded p-2 flex items-center justify-between">
-                  <div className="text-[10px] text-gray-600 dark:text-gray-400">Prior Art Search</div>
-                  <div className="text-sm font-bold text-gray-900 dark:text-gray-100">$1,500</div>
+                <div className="bg-muted/50 border border-border rounded p-2 flex items-center justify-between">
+                  <div className="text-[10px] text-muted-foreground">Prior Art Search</div>
+                  <div className="text-sm font-bold text-foreground">$1,500</div>
                 </div>
-                <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded p-2 flex items-center justify-between">
-                  <div className="text-[10px] text-gray-600 dark:text-gray-400">FTO Analysis</div>
-                  <div className="text-sm font-bold text-gray-900 dark:text-gray-100">$2,500</div>
+                <div className="bg-muted/50 border border-border rounded p-2 flex items-center justify-between">
+                  <div className="text-[10px] text-muted-foreground">FTO Analysis</div>
+                  <div className="text-sm font-bold text-foreground">$2,500</div>
                 </div>
-                <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded p-2 flex items-center justify-between">
-                  <div className="text-[10px] text-gray-600 dark:text-gray-400">Validity Search</div>
-                  <div className="text-sm font-bold text-gray-900 dark:text-gray-100">$5,000</div>
+                <div className="bg-muted/50 border border-border rounded p-2 flex items-center justify-between">
+                  <div className="text-[10px] text-muted-foreground">Validity Search</div>
+                  <div className="text-sm font-bold text-foreground">$5,000</div>
                 </div>
               </div>
             </div>
 
             {/* Per-Year Subscription Costs */}
             <div>
-              <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">Annual Subscription</div>
+              <div className="text-[10px] font-medium text-muted-foreground mb-1.5">Annual Subscription</div>
               <div className="space-y-1.5">
-                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2 flex items-center justify-between">
-                  <div className="text-[10px] text-amber-700 dark:text-amber-400">PatSnap (per user)</div>
-                  <div className="text-sm font-bold text-amber-900 dark:text-amber-100">$12,000</div>
+                <div className="bg-primary/10 border border-primary/30 rounded p-2 flex items-center justify-between">
+                  <div className="text-[10px] text-primary">PatSnap (per user)</div>
+                  <div className="text-sm font-bold text-primary">$12,000</div>
                 </div>
-                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2 flex items-center justify-between">
-                  <div className="text-[10px] text-amber-700 dark:text-amber-400">Derwent (per user)</div>
-                  <div className="text-sm font-bold text-amber-900 dark:text-amber-100">$25,000</div>
+                <div className="bg-primary/10 border border-primary/30 rounded p-2 flex items-center justify-between">
+                  <div className="text-[10px] text-primary">Derwent (per user)</div>
+                  <div className="text-sm font-bold text-primary">$25,000</div>
                 </div>
               </div>
             </div>
@@ -258,7 +258,7 @@ export function TimeSavedBreakdownDialog({
 
         {/* Footer */}
         <div className="pt-2 mt-2">
-          <p className="text-[9px] text-gray-500 dark:text-gray-500 text-center">
+          <p className="text-[9px] text-muted-foreground text-center">
             Estimates based on 2024 industry benchmarks. Attorney rates from AmLaw 200. Tool pricing from public rate cards.
           </p>
         </div>

@@ -63,17 +63,17 @@ const CsvRendererComponent = ({ csvId, alt }: { csvId: string; alt?: string }) =
 
   if (loading) {
     return (
-      <div className="my-4 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
-        <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-        <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading table...</div>
+      <div className="my-4 border border-border rounded-lg p-6 text-center">
+        <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+        <div className="mt-2 text-sm text-muted-foreground">Loading table...</div>
       </div>
     );
   }
 
   if (error || !csvData) {
     return (
-      <div className="my-4 border border-red-200 dark:border-red-700 rounded-lg p-4 text-center">
-        <div className="text-sm text-red-600 dark:text-red-400">Failed to load table</div>
+      <div className="my-4 border border-destructive/30 rounded-lg p-4 text-center">
+        <div className="text-sm text-destructive">Failed to load table</div>
       </div>
     );
   }
@@ -81,8 +81,8 @@ const CsvRendererComponent = ({ csvId, alt }: { csvId: string; alt?: string }) =
   // Validate that rows is an array
   if (!Array.isArray(csvData.rows)) {
     return (
-      <div className="my-4 border border-red-200 dark:border-red-700 rounded-lg p-4 text-center">
-        <div className="text-sm text-red-600 dark:text-red-400">Invalid table data format</div>
+      <div className="my-4 border border-destructive/30 rounded-lg p-4 text-center">
+        <div className="text-sm text-destructive">Invalid table data format</div>
       </div>
     );
   }
