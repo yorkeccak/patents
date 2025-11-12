@@ -7,7 +7,9 @@ import { Analytics } from '@vercel/analytics/next';
 import { AuthInitializer } from "@/components/auth/auth-initializer";
 import { QueryProvider } from "@/components/query-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { PostHogProvider } from "@/components/posthog-provider";
 import { logEnvironmentStatus } from "@/lib/env-validation";
+import { ProviderSelector } from "@/components/providers/provider-selector";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -23,24 +25,24 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   ),
   title: {
-    default: "Patents by Valyu",
-    template: "%s | Patents by Valyu",
+    default: "PatentAI - Conversational Patent Search | By Valyu",
+    template: "%s | PatentAI | By Valyu",
   },
   description:
-    "AI-powered analysis by Valyu. Real-time data, secure Python execution in Daytona sandboxes, and interactive visualizations for research and reporting.",
-  applicationName: "Patents by Valyu",
+    "AI-powered conversational patent search powered by Valyu's specialized patent data infrastructure. Prior art search, freedom-to-operate analysis, competitive intelligence, and more - all through natural language.",
+  applicationName: "PatentAI | By Valyu",
   openGraph: {
-    title: "Patents by Valyu",
+    title: "PatentAI - Conversational Patent Search | By Valyu",
     description:
-      "AI-powered analysis by Valyu. Real-time data, secure Python execution in Daytona sandboxes, and interactive visualizations for research and reporting.",
+      "Find prior art, analyze patent portfolios, and conduct freedom-to-operate searches using natural language. Professional-grade patent search made accessible. Search USPTO, EPO, PCT patents instantly.",
     url: "/",
-    siteName: "Patents by Valyu",
+    siteName: "PatentAI | By Valyu",
     images: [
       {
         url: "/valyu.png",
         width: 1200,
         height: 630,
-        alt: "Patents by Valyu",
+        alt: "PatentAI - Conversational Patent Search",
       },
     ],
     locale: "en_US",
@@ -48,9 +50,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Patents by Valyu",
+    title: "PatentAI - Conversational Patent Search | By Valyu",
     description:
-      "AI-powered analysis by Valyu. Real-time data, secure Python execution in Daytona sandboxes, and interactive visualizations for research and reporting.",
+      "AI-powered patent search using Valyu's specialized patent data infrastructure. Prior art, FTO, competitive intelligence in natural language. Search millions of patents instantly.",
     images: ["/valyu.png"],
   },
   icons: {
@@ -71,7 +73,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-x-hidden`}
       >
         <ThemeProvider
           attribute="class"
@@ -81,11 +83,14 @@ export default function RootLayout({
         >
           <QueryProvider>
             <AuthInitializer>
-              <OllamaProvider>
-                <MissingKeysDialog />
-                {children}
-                <Analytics />
-              </OllamaProvider>
+              <PostHogProvider>
+                <OllamaProvider>
+                  <MissingKeysDialog />
+                  <ProviderSelector />
+                  {children}
+                  <Analytics />
+                </OllamaProvider>
+              </PostHogProvider>
             </AuthInitializer>
           </QueryProvider>
         </ThemeProvider>

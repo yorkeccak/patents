@@ -47,22 +47,29 @@ export function OllamaStatusIndicator({ hasMessages = false }: { hasMessages?: b
   };
 
   useEffect(() => {
-    // Only check Ollama status in development mode, and only once on startup
+    // Only check Ollama status in development mode
     if (process.env.NEXT_PUBLIC_APP_MODE === 'development') {
       checkOllamaStatus();
-      
-      // Show initial dialog if Ollama is available but not connected
+
+      // Check status every 30 seconds
+      const interval = setInterval(checkOllamaStatus, 30000);
+      return () => clearInterval(interval);
+    }
+  }, []); // Empty dependency array - only run once on mount
+
+  // Separate useEffect for initial dialog
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_APP_MODE === 'development' && status) {
       const hasShownDialog = localStorage.getItem('ollama-dialog-shown');
-      if (!hasShownDialog) {
-        setTimeout(() => {
-          if (status && !status.connected && status.available) {
-            setShowInitialDialog(true);
-            localStorage.setItem('ollama-dialog-shown', 'true');
-          }
+      if (!hasShownDialog && !status.connected && status.available) {
+        const timer = setTimeout(() => {
+          setShowInitialDialog(true);
+          localStorage.setItem('ollama-dialog-shown', 'true');
         }, 2000);
+        return () => clearTimeout(timer);
       }
     }
-  }, []); // Remove status dependency and interval polling
+  }, [status]);
 
   // Don't render anything in production mode
   if (process.env.NEXT_PUBLIC_APP_MODE === 'production') {
@@ -170,10 +177,10 @@ export function OllamaStatusIndicator({ hasMessages = false }: { hasMessages?: b
                     </div>
                     <div>
                       <h2 className='text-sm font-medium text-gray-900 dark:text-gray-100'>
-                        Run Finance with Your Local Models
+                        Run PatentAI with Your Local Models
                       </h2>
                       <p className='text-xs text-gray-500 dark:text-gray-400 mt-0.5'>
-                        Use Ollama for privacy and unlimited queries
+                        Use Ollama for privacy and unlimited patent searches
                       </p>
                     </div>
                   </div>
@@ -260,8 +267,8 @@ export function OllamaStatusIndicator({ hasMessages = false }: { hasMessages?: b
                       <div className='flex items-start gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg'>
                         <AlertTriangle className='h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5' />
                         <div className='text-xs text-amber-800 dark:text-amber-200'>
-                          <strong className='font-medium'>Tool Calling Performance:</strong> Many models struggle with function calling. 
-                          We recommend <strong>Qwen2.5:7B or larger</strong> for best results with financial tools.
+                          <strong className='font-medium'>Tool Calling Performance:</strong> Many models struggle with function calling.
+                          We recommend <strong>Qwen2.5:7B or larger</strong> for best results with patent search tools.
                         </div>
                       </div>
                       
@@ -293,7 +300,7 @@ export function OllamaStatusIndicator({ hasMessages = false }: { hasMessages?: b
                                       {selectedModel === model.name ? '✓ ' : ''}{model.name}
                                     </span>
                                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                      recommendation.type === 'recommended' 
+                                      recommendation.type === 'recommended'
                                         ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                                         : recommendation.type === 'good'
                                         ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
@@ -366,7 +373,7 @@ export function OllamaStatusIndicator({ hasMessages = false }: { hasMessages?: b
                   </div>
                   
                   <a
-                    href='https://docs.valyu.network/local-models'
+                    href='https://docs.valyu.ai/local-models'
                     target='_blank'
                     rel='noopener noreferrer'
                     className='text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 underline'

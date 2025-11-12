@@ -1,13 +1,8 @@
-import { InferUITools, UIMessage, UIDataTypes } from "ai";
-import { patentTools } from "./tools";
+import { InferUITools, UIMessage, UIDataTypes } from 'ai';
+import { healthcareTools } from './tools';
 
-// Infer the types from our everything tools
-export type HealthcareUITools = InferUITools<typeof patentTools>;
+// Infer the types from our biomedical tools
+export type BiomedUITools = InferUITools<typeof healthcareTools>;
 
 // Create a custom UIMessage type with our tools
-export type HealthcareUIMessage = UIMessage<
-  never,
-  UIDataTypes,
-  HealthcareUITools
->;
-
+export type BiomedUIMessage = UIMessage<never, UIDataTypes, BiomedUITools>;

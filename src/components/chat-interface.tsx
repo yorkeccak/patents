@@ -1,51 +1,35 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
 import React from "react";
+import { useChat } from "@ai-sdk/react";
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
-import { HealthcareUIMessage } from "@/lib/types";
-import pdf from "pdf-parse";
+import { BiomedUIMessage } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useOllama } from "@/lib/ollama-context";
+import { useLocalProvider } from "@/lib/ollama-context";
 import { useAuthStore } from "@/lib/stores/use-auth-store";
-import { AuthModal } from "@/components/auth/auth-modal";
-import { createClient } from "@/utils/supabase/client";
-import { track } from "@vercel/analytics";
-import { OllamaStatusIndicator } from "@/components/ollama-status-indicator";
-import { useSavedResults } from "@/lib/saved-result-context";
-import type { SavedItem } from "@/lib/saved-result-context";
+import { useSubscription } from "@/hooks/use-subscription";
+import { createClient } from '@/utils/supabase/client-wrapper';
+import { track } from '@vercel/analytics';
+import { AuthModal } from '@/components/auth/auth-modal';
+import { RateLimitBanner } from '@/components/rate-limit-banner';
+import { ModelCompatibilityDialog } from '@/components/model-compatibility-dialog';
+
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { VirtualizedContentDialog } from "@/components/virtualized-content-dialog";
-import { NewsCarousel } from "@/components/news-carousel";
 import {
   useState,
   useRef,
@@ -61,63 +45,228 @@ import { useSearchParams } from "next/navigation";
 import {
   RotateCcw,
   Square,
-  AlertCircle,
   Trash2,
+  AlertCircle,
   Loader2,
   Edit3,
   Wrench,
-  Check,
   CheckCircle,
   Copy,
   Clock,
-  Book,
-  BookDashed,
   ChevronDown,
-  ChevronUp,
   ExternalLink,
   FileText,
   Clipboard,
-  X,
-  Library,
-  Plus,
+  Download,
+  Brain,
+  Search,
+  Globe,
+  BookOpen,
+  Code2,
+  Table,
+  BarChart3,
+  Check,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import "katex/dist/katex.min.css";
 import katex from "katex";
+import { BiomedicalChart } from "@/components/financial-chart";
+import { CSVPreview } from "@/components/csv-preview";
 import { CitationTextRenderer } from "@/components/citation-text-renderer";
 import { CitationMap } from "@/lib/citation-utils";
-import ClinicalTrialsView from "@/components/ClinicalTrialsView";
+import { CsvRenderer } from "@/components/csv-renderer";
+import { Favicon } from "@/components/favicon";
 const JsonView = dynamic(() => import("@uiw/react-json-view"), {
   ssr: false,
   loading: () => <div className="text-xs text-gray-500">Loading JSON…</div>,
 });
 import {
-  Dropzone,
-  DropzoneContent,
-  DropzoneEmptyState,
-} from "@/components/ui/shadcn-io/dropzone";
-import {
   preprocessMarkdownText,
-  cleanFinancialText,
+  cleanBiomedicalText,
 } from "@/lib/markdown-utils";
+import { parseFirstLine } from "@/lib/text-utils";
 import { motion, AnimatePresence } from "framer-motion";
 import DataSourceLogos from "./data-source-logos";
 import SocialLinks from "./social-links";
-import {
-  SeenResultsProvider,
-  useSeenResults,
-} from "@/lib/seen-results-context";
-import { SavedResultsProvider } from "@/lib/saved-result-context";
-import { generateText } from "ai";
-import { openai } from "@ai-sdk/openai";
-import { BackgroundOverlay } from "./ui/background-overlay";
+import { calculateMessageMetrics, MessageMetrics } from "@/lib/metrics-calculator";
+import { MetricsPills } from "@/components/metrics-pills";
 
 // Debug toggles removed per request
 
-// Separate component for reasoning to avoid hook violations
-const ReasoningComponent = ({
+// Professional BioMed Research UI - Workflow-inspired with checkmarks and clean cards
+const TimelineStep = memo(({
+  part,
+  messageId,
+  index,
+  status,
+  type = 'reasoning',
+  title,
+  subtitle,
+  icon,
+  expandedTools,
+  toggleToolExpansion,
+  children,
+}: {
+  part: any;
+  messageId: string;
+  index: number;
+  status: string;
+  type?: 'reasoning' | 'search' | 'action' | 'tool';
+  title: string;
+  subtitle?: React.ReactNode;
+  icon?: React.ReactNode;
+  expandedTools: Set<string>;
+  toggleToolExpansion: (id: string) => void;
+  children?: React.ReactNode;
+}) => {
+  const stepId = `step-${type}-${messageId}-${index}`;
+  const isExpanded = expandedTools.has(stepId);
+  const hasContent = children || (part.text && part.text.length > 0);
+
+  const toggleExpand = () => {
+    toggleToolExpansion(stepId);
+  };
+
+  const isComplete = status === 'complete';
+  const isStreaming = status === 'streaming';
+  const isError = status === 'error';
+
+  return (
+    <div className="group relative py-0.5 animate-in fade-in duration-200">
+      {/* Minimal, refined design */}
+      <div
+        className={`relative flex items-start gap-4 py-4 px-3 sm:px-4 -mx-1 sm:-mx-2 rounded-md transition-all duration-150 ${
+          isStreaming ? 'bg-blue-50/50 dark:bg-blue-950/10' : ''
+        } ${
+          hasContent ? 'hover:bg-gray-50 dark:hover:bg-white/[0.02] cursor-pointer' : ''
+        }`}
+        onClick={hasContent ? toggleExpand : undefined}
+      >
+        {/* Minimal status indicator */}
+        <div className="flex-shrink-0">
+          {isComplete ? (
+            <div className="w-4 h-4 rounded-full bg-emerald-500/15 dark:bg-emerald-500/25 flex items-center justify-center">
+              <Check className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-500 stroke-[2.5]" />
+            </div>
+          ) : isStreaming ? (
+            <div className="relative w-4 h-4">
+              <div className="absolute inset-0 rounded-full border border-blue-300/40 dark:border-blue-700/40" />
+              <div className="absolute inset-0 rounded-full border border-transparent border-t-blue-500 dark:border-t-blue-400 animate-spin" />
+            </div>
+          ) : isError ? (
+            <div className="w-4 h-4 rounded-full bg-red-500/15 dark:bg-red-500/25 flex items-center justify-center">
+              <AlertCircle className="w-2.5 h-2.5 text-red-600 dark:text-red-500" />
+            </div>
+          ) : (
+            <div className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-700" />
+          )}
+        </div>
+
+        {/* Clean icon */}
+        {icon && (
+          <div className={`flex-shrink-0 w-4 h-4 ${
+            isStreaming ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'
+          }`}>
+            {icon}
+          </div>
+        )}
+
+        {/* Clean typography */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {title}
+            </span>
+          </div>
+          {subtitle && !isExpanded && (
+            <div className="text-xs text-gray-500 dark:text-gray-500 line-clamp-1 mt-0.5">
+              {subtitle}
+            </div>
+          )}
+        </div>
+
+        {/* Minimal chevron */}
+        {hasContent && !isStreaming && (
+          <ChevronDown className={`h-3.5 w-3.5 text-gray-400 dark:text-gray-600 flex-shrink-0 transition-transform duration-150 ${
+            isExpanded ? 'rotate-180' : ''
+          }`} />
+        )}
+      </div>
+
+      {/* Clean expanded content */}
+      {isExpanded && hasContent && (
+        <div className="mt-1.5 ml-6 mr-2 animate-in fade-in duration-150">
+          {children || (
+            <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 bg-gray-50/50 dark:bg-white/[0.02] rounded-lg px-3 py-2.5 border-l-2 border-gray-200 dark:border-gray-800">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                {part.text || ''}
+              </ReactMarkdown>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.part === nextProps.part &&
+    prevProps.status === nextProps.status &&
+    prevProps.expandedTools === nextProps.expandedTools &&
+    prevProps.children === nextProps.children
+  );
+});
+TimelineStep.displayName = 'TimelineStep';
+
+// Live Reasoning Preview - shows latest **title** + 2 most recent lines
+// Lines wrap and stream/switch as new content comes in
+const LiveReasoningPreview = memo(({ title, lines }: { title: string; lines: string[] }) => {
+  if (!title && lines.length === 0) return null;
+
+  // Always show the last 2 lines
+  const displayLines = lines.slice(-2);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.12, ease: 'easeOut' }}
+      className="my-1 ml-3 sm:ml-8 mr-3 sm:mr-0"
+    >
+      <div className="bg-blue-50/50 dark:bg-blue-950/20 border-l-2 border-blue-300 dark:border-blue-700 rounded-r px-2 sm:px-2.5 py-1.5 space-y-1 overflow-hidden max-w-full">
+        {/* Show the latest **title** */}
+        {title && (
+          <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 truncate">
+            {title}
+          </div>
+        )}
+
+        {/* Show 2 most recent lines - each limited to 1 visual line */}
+        <AnimatePresence mode="popLayout">
+          {displayLines.map((line, index) => (
+            <motion.div
+              key={`${displayLines.length}-${index}-${line.substring(0, 30)}`}
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.08 }}
+              className="text-xs text-gray-500 dark:text-gray-400 leading-snug truncate max-w-full"
+            >
+              {line}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+});
+
+LiveReasoningPreview.displayName = 'LiveReasoningPreview';
+
+// Reasoning component - wraps TimelineStep
+const ReasoningComponent = memo(({
   part,
   messageId,
   index,
@@ -132,117 +281,190 @@ const ReasoningComponent = ({
   expandedTools: Set<string>;
   toggleToolExpansion: (id: string) => void;
 }) => {
-  const reasoningId = `reasoning-${messageId}-${index}`;
-  // Check if explicitly collapsed (default is expanded for streaming)
-  const isCollapsed = expandedTools.has(`collapsed-${reasoningId}`);
   const reasoningText = part.text || "";
-  const previewLength = 150;
-  const shouldShowToggle =
-    reasoningText.length > previewLength || status === "streaming";
-  const displayText = !isCollapsed
-    ? reasoningText
-    : reasoningText.slice(0, previewLength);
-
-  const copyReasoningTrace = () => {
-    navigator.clipboard.writeText(reasoningText);
-  };
-
-  const toggleCollapse = () => {
-    const collapsedKey = `collapsed-${reasoningId}`;
-    toggleToolExpansion(collapsedKey);
-  };
-
-  // Auto-scroll effect for streaming reasoning
-  const reasoningRef = useRef<HTMLPreElement>(null);
-  useEffect(() => {
-    if (status === "streaming" && reasoningRef.current && !isCollapsed) {
-      reasoningRef.current.scrollTop = reasoningRef.current.scrollHeight;
-    }
-  }, [reasoningText, status, isCollapsed]);
+  // Extract the first meaningful line as the title and strip markdown
+  const firstLine = reasoningText.split('\n').find((line: string) => line.trim().length > 0) || "";
+  // Remove markdown formatting like **, *, _, etc.
+  const cleanedLine = firstLine.replace(/\*\*/g, '').replace(/\*/g, '').replace(/_/g, '').trim();
+  const title = cleanedLine.length > 50 ? cleanedLine.slice(0, 50) + '...' : cleanedLine || "Thinking";
 
   return (
-    <div className="mt-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-      <div className="p-2.5 sm:p-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400">
-            <span className="text-lg">🧠</span>
-            <span className="font-medium text-sm">AI Reasoning Process</span>
-            {status === "streaming" && (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            {reasoningText && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={copyReasoningTrace}
-                className="h-6 px-2 text-purple-700 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40"
-              >
-                <Copy className="h-3 w-3" />
-              </Button>
-            )}
-            {shouldShowToggle && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleCollapse}
-                className="h-6 px-2 text-purple-700 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40"
-              >
-                {isCollapsed ? (
-                  <>
-                    <ChevronDown className="h-3 w-3 mr-1" />
-                    Show
-                  </>
-                ) : (
-                  <>
-                    <ChevronUp className="h-3 w-3 mr-1" />
-                    Hide
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
-        </div>
+    <TimelineStep
+      part={part}
+      messageId={messageId}
+      index={index}
+      status={status}
+      type="reasoning"
+      title={title}
+      subtitle={undefined}
+      icon={<Brain />}
+      expandedTools={expandedTools}
+      toggleToolExpansion={toggleToolExpansion}
+    />
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.part.text === nextProps.part.text &&
+    prevProps.messageId === nextProps.messageId &&
+    prevProps.index === nextProps.index &&
+    prevProps.status === nextProps.status &&
+    prevProps.expandedTools === nextProps.expandedTools
+  );
+});
+ReasoningComponent.displayName = 'ReasoningComponent';
 
-        <div
-          className={`${
-            !isCollapsed
-              ? "max-h-96 overflow-y-auto"
-              : "max-h-20 overflow-hidden"
-          } transition-all duration-200 scroll-smooth`}
-        >
-          <pre
-            ref={reasoningRef}
-            className="text-xs text-purple-800 dark:text-purple-200 whitespace-pre-wrap font-mono leading-relaxed bg-purple-25 dark:bg-purple-950/30 p-2 rounded border"
-            style={{ scrollBehavior: "smooth" }}
-          >
-            {displayText}
-            {isCollapsed && shouldShowToggle && (
-              <span className="text-purple-500 dark:text-purple-400">...</span>
-            )}
-          </pre>
-        </div>
+// ChartImageRenderer component - Fetches and renders charts from markdown references
+const ChartImageRendererComponent = ({ chartId, alt }: { chartId: string; alt?: string }) => {
+  const [chartData, setChartData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-        {status === "streaming" && (
-          <div className="mt-2 flex items-center justify-between text-xs text-purple-600 dark:text-purple-400">
-            <div className="flex items-center gap-2 italic">
-              <Clock className="h-3 w-3" />
-              Reasoning in progress...
-            </div>
-            {reasoningText.length > 0 && (
-              <div className="text-xs font-mono">
-                {reasoningText.length} chars
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchChart = async () => {
+      try {
+        const response = await fetch(`/api/charts/${chartId}`);
+        if (cancelled) return;
+
+        if (!response.ok) {
+          setError(true);
+          setLoading(false);
+          return;
+        }
+
+        const data = await response.json();
+        if (cancelled) return;
+
+        setChartData(data);
+        setLoading(false);
+      } catch (err) {
+        if (cancelled) return;
+        setError(true);
+        setLoading(false);
+      }
+    };
+
+    fetchChart();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chartId]);
+
+  if (loading) {
+    return (
+      <span className="block w-full border border-gray-200 dark:border-gray-700 rounded-lg p-12 my-4 text-center">
+        <span className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></span>
+        <span className="block mt-3 text-sm text-gray-500 dark:text-gray-400">Loading chart...</span>
+      </span>
+    );
+  }
+
+  if (error || !chartData) {
+    return (
+      <span className="block w-full border border-red-200 dark:border-red-700 rounded-lg p-6 my-4 text-center">
+        <span className="text-sm text-red-600 dark:text-red-400">Failed to load chart</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="block w-full my-4">
+      <BiomedicalChart {...chartData} key={chartId} />
+    </span>
   );
 };
 
-// Enhanced markdown components that handle both math and financial content
+// Memoize ChartImageRenderer to prevent unnecessary re-fetches and re-renders
+const ChartImageRenderer = memo(ChartImageRendererComponent, (prevProps, nextProps) => {
+  return prevProps.chartId === nextProps.chartId && prevProps.alt === nextProps.alt;
+});
+ChartImageRenderer.displayName = 'ChartImageRenderer';
+
+// CSV rendering now handled by shared CsvRenderer component
+
+// Memoized Chart Result - prevents re-rendering when props don't change
+const MemoizedChartResult = memo(function MemoizedChartResult({
+  chartData,
+  actionId,
+  expandedTools,
+  toggleToolExpansion
+}: {
+  chartData: any;
+  actionId: string;
+  expandedTools: Set<string>;
+  toggleToolExpansion: (id: string) => void;
+}) {
+  return (
+    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <BiomedicalChart {...chartData} />
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.chartData === nextProps.chartData &&
+    prevProps.actionId === nextProps.actionId &&
+    prevProps.expandedTools === nextProps.expandedTools
+  );
+});
+MemoizedChartResult.displayName = 'MemoizedChartResult';
+
+// Memoized Code Execution Result - prevents re-rendering when props don't change
+// Uses plain pre/code WITHOUT syntax highlighting to prevent browser freeze
+const MemoizedCodeExecutionResult = memo(function MemoizedCodeExecutionResult({
+  code,
+  output,
+  actionId,
+  expandedTools,
+  toggleToolExpansion
+}: {
+  code: string;
+  output: string;
+  actionId: string;
+  expandedTools: Set<string>;
+  toggleToolExpansion: (id: string) => void;
+}) {
+  const isExpanded = expandedTools.has(actionId);
+
+  // Escape HTML entities to prevent rendering <module> and other HTML-like content as actual HTML
+  const escapeHtml = (text: string) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Code Section - clean monospace display */}
+      <div>
+        <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Input</div>
+        <pre className="p-4 bg-gray-900 dark:bg-black/40 text-gray-100 text-xs overflow-x-auto rounded-lg max-h-[400px] overflow-y-auto border border-gray-800 dark:border-gray-800/50 shadow-inner">
+          <code>{code || "No code available"}</code>
+        </pre>
+      </div>
+
+      {/* Output Section - elegant typography */}
+      <div>
+        <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Output</div>
+        <div className="prose prose-sm max-w-none dark:prose-invert text-sm p-4 bg-white dark:bg-gray-800/50 rounded-lg max-h-[400px] overflow-y-auto border border-gray-200 dark:border-gray-700/50">
+          <MemoizedMarkdown text={escapeHtml(output)} />
+        </div>
+      </div>
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // Only re-render if these specific props change
+  return (
+    prevProps.code === nextProps.code &&
+    prevProps.output === nextProps.output &&
+    prevProps.actionId === nextProps.actionId &&
+    prevProps.expandedTools === nextProps.expandedTools
+  );
+});
+MemoizedCodeExecutionResult.displayName = 'MemoizedCodeExecutionResult';
+
+// Enhanced markdown components that handle both math and biomedical content
 const markdownComponents = {
   img: ({ src, alt, ...props }: any) => {
     // Don't render image if src is empty or undefined
@@ -250,25 +472,23 @@ const markdownComponents = {
       return null;
     }
 
-    // Validate URL - must be absolute URL or start with /
+
+    // Validate URL for regular images - must be absolute URL or start with /
     try {
       // Check if it's a valid absolute URL
       new URL(src);
     } catch {
       // Check if it starts with / (valid relative path for Next.js)
-      if (!src.startsWith("/")) {
-        console.warn(`Invalid image src: ${src}. Skipping image render.`);
+      if (!src.startsWith('/') && !src.startsWith('csv:') && !src.match(/^\/api\/(charts|csvs)\//)) {
         return (
-          <div className="text-xs text-gray-500 italic border border-gray-200 p-2 rounded">
-            [Image: {alt || src}] (Invalid URL - academic content)
-          </div>
+          <span className="text-xs text-gray-500 italic">
+            [Image: {alt || src}]
+          </span>
         );
       }
     }
 
-    return (
-      <Image src={src} alt={alt || ""} width={500} height={300} {...props} />
-    );
+    return <Image src={src} alt={alt || ""} width={500} height={300} {...props} />;
   },
   iframe: ({ src, ...props }: any) => {
     // Don't render iframe if src is empty or undefined
@@ -295,7 +515,6 @@ const markdownComponents = {
         />
       );
     } catch (error) {
-      console.warn("KaTeX rendering error:", error);
       return (
         <code className="math-fallback bg-gray-100 px-1 rounded">
           {mathContent}
@@ -307,9 +526,7 @@ const markdownComponents = {
   note: ({ children }: any) => (
     <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 pl-4 py-2 my-2 text-sm">
       <div className="flex items-start gap-2">
-        <span className="text-blue-600 dark:text-blue-400 font-medium">
-          Note:
-        </span>
+        <span className="text-blue-600 dark:text-blue-400 font-medium">Note:</span>
         <div>{children}</div>
       </div>
     </div>
@@ -319,7 +536,9 @@ const markdownComponents = {
       {children}
     </span>
   ),
-  f: ({ children }: any) => <span className="italic">{children}</span>,
+  f: ({ children }: any) => (
+    <span className="italic">{children}</span>
+  ),
   // Handle other common academic tags
   ref: ({ children }: any) => (
     <span className="text-blue-600 dark:text-blue-400 text-sm">
@@ -336,6 +555,146 @@ const markdownComponents = {
       {children}
     </div>
   ),
+  // Fix paragraph wrapping for block elements (charts) to avoid hydration errors
+  p: ({ children, ...props }: any) => {
+    // Check if this paragraph contains any React component (like charts)
+    const hasBlockContent = React.Children.toArray(children).some((child: any) => {
+      return React.isValidElement(child) && typeof child.type !== 'string';
+    });
+
+    // If paragraph contains block content (like charts), render as div to avoid hydration errors
+    if (hasBlockContent) {
+      return <div {...props}>{children}</div>;
+    }
+
+    return <p {...props}>{children}</p>;
+  },
+};
+
+// Memoized component for parsed first line to avoid repeated parsing
+const MemoizedFirstLine = memo(function MemoizedFirstLine({
+  text,
+  fallback,
+}: {
+  text: string;
+  fallback: string;
+}) {
+  const parsed = useMemo(
+    () => parseFirstLine(text, fallback),
+    [text, fallback]
+  );
+  return <>{parsed}</>;
+});
+
+// Helper function to group message parts - memoized to prevent re-computation on every render
+function groupMessageParts(parts: any[]): any[] {
+  const groupedParts: any[] = [];
+  let currentReasoningGroup: any[] = [];
+  const seenToolCallIds = new Set<string>();
+
+
+  parts.forEach((part, index) => {
+    // Skip step-start markers entirely - they're metadata from AI SDK
+    if (part.type === "step-start") {
+      return;
+    }
+
+    // Deduplicate tool calls by toolCallId - skip if we've already seen this tool call
+    if (part.toolCallId && seenToolCallIds.has(part.toolCallId)) {
+      return;
+    }
+
+    // Track this tool call ID
+    if (part.toolCallId) {
+      seenToolCallIds.add(part.toolCallId);
+    }
+
+    if (
+      part.type === "reasoning" &&
+      part.text &&
+      part.text.trim() !== ""
+    ) {
+      currentReasoningGroup.push({ part, index });
+    } else {
+      if (currentReasoningGroup.length > 0) {
+        groupedParts.push({
+          type: "reasoning-group",
+          parts: currentReasoningGroup,
+        });
+        currentReasoningGroup = [];
+      }
+      groupedParts.push({ type: "single", part, index });
+    }
+  });
+
+  // Add any remaining reasoning group
+  if (currentReasoningGroup.length > 0) {
+    groupedParts.push({
+      type: "reasoning-group",
+      parts: currentReasoningGroup,
+    });
+  }
+
+
+  return groupedParts;
+}
+
+// Helper to parse and extract CSV/chart references from markdown
+const parseSpecialReferences = (text: string): Array<{ type: 'text' | 'csv' | 'chart', content: string, id?: string }> => {
+  const segments: Array<{ type: 'text' | 'csv' | 'chart', content: string, id?: string }> = [];
+
+  // Pattern to match ![alt](csv:uuid) or ![alt](/api/csvs/uuid) or chart references
+  const pattern = /!\[([^\]]*)\]\((csv:[a-f0-9-]+|\/api\/csvs\/[a-f0-9-]+|\/api\/charts\/[^\/]+\/image)\)/gi;
+
+  let lastIndex = 0;
+  let match;
+
+  while ((match = pattern.exec(text)) !== null) {
+    // Add text before the reference
+    if (match.index > lastIndex) {
+      segments.push({
+        type: 'text',
+        content: text.substring(lastIndex, match.index)
+      });
+    }
+
+    const url = match[2];
+
+    // Check if it's a CSV reference
+    const csvProtocolMatch = url.match(/^csv:([a-f0-9-]+)$/i);
+    const csvApiMatch = url.match(/^\/api\/csvs\/([a-f0-9-]+)$/i);
+
+    if (csvProtocolMatch || csvApiMatch) {
+      const csvId = (csvProtocolMatch || csvApiMatch)![1];
+      segments.push({
+        type: 'csv',
+        content: match[0],
+        id: csvId
+      });
+    } else {
+      // Chart reference
+      const chartMatch = url.match(/^\/api\/charts\/([^\/]+)\/image$/);
+      if (chartMatch) {
+        segments.push({
+          type: 'chart',
+          content: match[0],
+          id: chartMatch[1]
+        });
+      }
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    segments.push({
+      type: 'text',
+      content: text.substring(lastIndex)
+    });
+  }
+
+  return segments;
 };
 
 // Memoized Markdown renderer to avoid re-parsing on unrelated state updates
@@ -345,92 +704,285 @@ const MemoizedMarkdown = memo(function MemoizedMarkdown({
   text: string;
 }) {
   const enableRawHtml = (text?.length || 0) < 20000;
+
+  // Parse special references (CSV/charts) - MUST be before any conditional returns
+  const specialSegments = useMemo(() => parseSpecialReferences(text), [text]);
+  const hasSpecialRefs = specialSegments.some(s => s.type === 'csv' || s.type === 'chart');
+
+  // Process text for regular markdown - MUST be before any conditional returns
   const processed = useMemo(
-    () => preprocessMarkdownText(cleanFinancialText(text || "")),
+    () => {
+      const result = preprocessMarkdownText(cleanBiomedicalText(text || ""));
+      return result;
+    },
     [text]
   );
+
+  // If we have CSV or chart references, render them separately to avoid nesting issues
+  if (hasSpecialRefs) {
+    return (
+      <>
+        {specialSegments.map((segment, idx) => {
+          if (segment.type === 'csv' && segment.id) {
+            return <CsvRenderer key={`${segment.id}-${idx}`} csvId={segment.id} />;
+          }
+          if (segment.type === 'chart' && segment.id) {
+            return <ChartImageRenderer key={`${segment.id}-${idx}`} chartId={segment.id} />;
+          }
+          // Render text segment as markdown
+          const segmentProcessed = preprocessMarkdownText(cleanBiomedicalText(segment.content));
+          return (
+            <ReactMarkdown
+              key={idx}
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents as any}
+              rehypePlugins={enableRawHtml ? [rehypeRaw] : []}
+              skipHtml={!enableRawHtml}
+              unwrapDisallowed={true}
+            >
+              {segmentProcessed}
+            </ReactMarkdown>
+          );
+        })}
+      </>
+    );
+  }
+
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
-      components={
-        {
-          ...markdownComponents,
-          fg: ({ children }: any) => <>{children}</>,
-        } as any
-      }
+      components={markdownComponents as any}
       rehypePlugins={enableRawHtml ? [rehypeRaw] : []}
       skipHtml={!enableRawHtml}
+      unwrapDisallowed={true}
     >
       {processed}
     </ReactMarkdown>
   );
+}, (prevProps, nextProps) => {
+  // PERFORMANCE FIX: Only re-render if text actually changes
+  return prevProps.text === nextProps.text;
 });
+
+// THIS IS THE KEY OPTIMIZATION - prevents re-renders during streaming
+// Extract citations ONLY when parts change, NOT when text streams
+const MemoizedTextPartWithCitations = memo(
+  function MemoizedTextPartWithCitations({
+    text,
+    messageParts,
+    currentPartIndex,
+    allMessages,
+    currentMessageIndex,
+  }: {
+    text: string;
+    messageParts: any[];
+    currentPartIndex: number;
+    allMessages?: any[];
+    currentMessageIndex?: number;
+  }) {
+    // Extract citations only when parts before this one change, not when text streams
+    const citations = useMemo(() => {
+      const citationMap: CitationMap = {};
+      let citationNumber = 1;
+
+
+      // Scan ALL previous messages AND current message for tool results
+      if (allMessages && currentMessageIndex !== undefined) {
+        for (let msgIdx = 0; msgIdx <= currentMessageIndex; msgIdx++) {
+          const msg = allMessages[msgIdx];
+          if (!msg) continue; // Skip if message doesn't exist
+          const parts = msg.parts || (Array.isArray(msg.content) ? msg.content : []);
+
+
+          for (let i = 0; i < parts.length; i++) {
+            const p = parts[i];
+
+
+        // Check for search tool results - handle both live streaming and saved message formats
+        // Live: p.type = "tool-patentSearch", Saved: p.type = "tool-result" with toolName
+        const isSearchTool =
+          p.type === "tool-patentSearch" ||
+          p.type === "tool-clinicalTrialsSearch" ||
+          p.type === "tool-drugInformationSearch" ||
+          p.type === "tool-biomedicalLiteratureSearch" ||
+          p.type === "tool-webSearch" ||
+          (p.type === "tool-result" && (
+            p.toolName === "patentSearch" ||
+            p.toolName === "clinicalTrialsSearch" ||
+            p.toolName === "drugInformationSearch" ||
+            p.toolName === "biomedicalLiteratureSearch" ||
+            p.toolName === "webSearch"
+          ));
+
+        if (isSearchTool && (p.output || p.result)) {
+          try {
+            const output = typeof p.output === "string" ? JSON.parse(p.output) :
+                          typeof p.result === "string" ? JSON.parse(p.result) :
+                          p.output || p.result;
+
+            // Check if this is a search result with multiple items
+            if (output.results && Array.isArray(output.results)) {
+              output.results.forEach((item: any) => {
+                const key = `[${citationNumber}]`;
+                let description = item.content || item.summary || item.description || "";
+                if (typeof description === "object") {
+                  description = JSON.stringify(description);
+                }
+                citationMap[key] = [
+                  {
+                    number: citationNumber.toString(),
+                    title: item.title || `Source ${citationNumber}`,
+                    url: item.url || "",
+                    description: description,
+                    source: item.source,
+                    date: item.date,
+                    authors: Array.isArray(item.authors) ? item.authors : [],
+                    doi: item.doi,
+                    relevanceScore: item.relevanceScore || item.relevance_score,
+                    toolType:
+                      p.type === "tool-patentSearch" || p.toolName === "patentSearch"
+                        ? "patent"
+                        : p.type === "tool-clinicalTrialsSearch" || p.toolName === "clinicalTrialsSearch"
+                        ? "clinical"
+                        : p.type === "tool-drugInformationSearch" || p.toolName === "drugInformationSearch"
+                        ? "drug"
+                        : p.type === "tool-biomedicalLiteratureSearch" || p.toolName === "biomedicalLiteratureSearch"
+                        ? "literature"
+                        : "web",
+                  },
+                ];
+                citationNumber++;
+              });
+            }
+          } catch (error) {
+            // Ignore parse errors
+          }
+        }
+          }
+        }
+      } else {
+        // Fallback: scan current message only (for streaming messages)
+        for (let i = 0; i < messageParts.length; i++) {
+          const p = messageParts[i];
+
+          const isSearchTool =
+            p.type === "tool-patentSearch" ||
+            p.type === "tool-clinicalTrialsSearch" ||
+            p.type === "tool-drugInformationSearch" ||
+            p.type === "tool-biomedicalLiteratureSearch" ||
+            p.type === "tool-webSearch" ||
+            (p.type === "tool-result" && (
+              p.toolName === "patentSearch" ||
+              p.toolName === "clinicalTrialsSearch" ||
+              p.toolName === "drugInformationSearch" ||
+              p.toolName === "biomedicalLiteratureSearch" ||
+              p.toolName === "webSearch"
+            ));
+
+          if (isSearchTool && (p.output || p.result)) {
+            try {
+              const output = typeof p.output === "string" ? JSON.parse(p.output) :
+                            typeof p.result === "string" ? JSON.parse(p.result) :
+                            p.output || p.result;
+
+              if (output.results && Array.isArray(output.results)) {
+                output.results.forEach((item: any) => {
+                  const key = `[${citationNumber}]`;
+                  let description = item.content || item.summary || item.description || "";
+                  if (typeof description === "object") {
+                    description = JSON.stringify(description);
+                  }
+                  citationMap[key] = [
+                    {
+                      number: citationNumber.toString(),
+                      title: item.title || `Source ${citationNumber}`,
+                      url: item.url || "",
+                      description: description,
+                      source: item.source,
+                      date: item.date,
+                      authors: Array.isArray(item.authors) ? item.authors : [],
+                      doi: item.doi,
+                      relevanceScore: item.relevanceScore || item.relevance_score,
+                      toolType:
+                        p.type === "tool-patentSearch" || p.toolName === "patentSearch"
+                          ? "patent"
+                          : p.type === "tool-clinicalTrialsSearch" || p.toolName === "clinicalTrialsSearch"
+                          ? "clinical"
+                          : p.type === "tool-drugInformationSearch" || p.toolName === "drugInformationSearch"
+                          ? "drug"
+                          : p.type === "tool-biomedicalLiteratureSearch" || p.toolName === "biomedicalLiteratureSearch"
+                          ? "literature"
+                          : "web",
+                    },
+                  ];
+                  citationNumber++;
+                });
+              }
+            } catch (error) {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+
+      return citationMap;
+    }, [messageParts, currentPartIndex, allMessages, currentMessageIndex]); // Only recompute when parts array changes, not text
+
+    // Memoize whether citations exist to avoid Object.keys() on every render
+    const hasCitations = useMemo(() => {
+      return Object.keys(citations).length > 0;
+    }, [citations]);
+
+    // Render with or without citations
+    if (hasCitations) {
+      return <CitationTextRenderer text={text} citations={citations} />;
+    } else {
+      return <MemoizedMarkdown text={text} />;
+    }
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison: only re-render if text changed OR parts structure changed
+    // This prevents re-rendering on every token during streaming
+    return (
+      prevProps.text === nextProps.text &&
+      prevProps.currentPartIndex === nextProps.currentPartIndex &&
+      prevProps.messageParts.length === nextProps.messageParts.length
+    );
+  }
+);
 
 // Helper function to extract search results for carousel display
 const extractSearchResults = (jsonOutput: string) => {
   try {
     const data = JSON.parse(jsonOutput);
-
     if (data.results && Array.isArray(data.results)) {
-      const mappedResults = data.results.map((result: any, index: number) => {
-        // Handle different result structures
-        // Clinical trials overview has fields directly on result (nct_id, brief_summary, etc.)
-        // Other tools have content field that might be string or object
-
-        let content = result.content || "";
-        let summary = result.brief_summary || "";
-
-        // If content is an object (like earnings data), stringify it
-        if (typeof content === "object" && content !== null) {
-          content = JSON.stringify(content, null, 2);
-        }
-
-        // Use brief_summary if available (clinical trials), otherwise use content
-        if (!summary) {
-          summary =
-            typeof content === "string" && content.length > 150
-              ? content.substring(0, 150) + "..."
-              : content;
-        }
-
-        return {
-          id: String(
-            // Prefer tool-supplied stable id when available
-            (result as any).id ||
-              // Fall back to domain identifiers when present
-              result.nct_id ||
-              result.doi ||
-              result.url ||
-              // Last resort: local index (not stable across messages)
-              index
-          ),
-          title:
-            typeof result.title === "string"
-              ? result.title
-              : result.title?.name ||
-                result.title?.text ||
-                JSON.stringify(result.title) ||
-                `Result ${index + 1}`,
-          summary: summary || "No summary available",
-          source: result.source || result.metadata?.source || "Unknown source",
-          date: result.date || result.start_date || "",
-          url: result.url || "",
-          fullContent:
-            result.brief_summary || content || "No content available",
-          isStructured: result.dataType === "structured",
-          dataType: result.dataType || "unstructured",
-          length: result.length,
-          imageUrls: result.imageUrl || result.image_url || {},
-          relevanceScore: result.relevanceScore || result.relevance_score || 0,
-          // Include clinical trial specific fields if present
-          nctId: result.nct_id,
-          status: result.status,
-          phase: result.phase,
-          enrollment: result.enrollment,
-          conditions: result.conditions,
-          interventions: result.interventions,
-        };
-      });
+      const mappedResults = data.results.map((result: any, index: number) => ({
+        id: index,
+        title: result.title || `Result ${index + 1}`,
+        summary: result.content
+          ? typeof result.content === "string"
+            ? result.content.length > 150
+              ? result.content.substring(0, 150) + "..."
+              : result.content
+            : typeof result.content === "number"
+            ? `Current Price: $${result.content.toFixed(2)}`
+            : `${
+                result.dataType === "structured" ? "Structured data" : "Data"
+              } from ${result.source || "source"}`
+          : "No summary available",
+        source: result.source || "Unknown source",
+        date: result.date || "",
+        url: result.url || "",
+        fullContent:
+          typeof result.content === "number"
+            ? `$${result.content.toFixed(2)}`
+            : result.content || "No content available",
+        isStructured: result.dataType === "structured",
+        dataType: result.dataType || "unstructured",
+        length: result.length,
+        imageUrls: result.imageUrl || result.image_url || {},
+        relevanceScore: result.relevanceScore || result.relevance_score || 0,
+      }));
 
       // Sort results: structured first, then by relevance score within each category
       return mappedResults.sort((a: any, b: any) => {
@@ -449,19 +1001,14 @@ const extractSearchResults = (jsonOutput: string) => {
 };
 
 // Search Result Card Component
-export const SearchResultCard = ({
+const SearchResultCard = ({
   result,
   type,
-  variant = "default",
-  onRemove,
 }: {
   result: any;
-  type: "web";
-  variant?: "default" | "saved";
-  onRemove?: () => void;
+  type: "clinical" | "drug" | "literature" | "web" | "patent";
 }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const user = useAuthStore((state) => state.user);
 
   // Calculate content size to determine if we need virtualization
   const contentSize = useMemo(() => {
@@ -475,212 +1022,10 @@ export const SearchResultCard = ({
   // Use virtualized dialog for content larger than 500KB
   const useVirtualized = contentSize > 100 * 1024;
 
-  const saved = useSavedResults();
-  const savedPayload = useMemo<SavedItem>(
-    () => ({
-      id: String(result.id ?? ""),
-      title:
-        typeof result.title === "string"
-          ? result.title
-          : String(result.title ?? "Untitled Result"),
-      url: result.url ?? undefined,
-      source: result.source ?? undefined,
-      type,
-      date: result.date ?? undefined,
-      data: result,
-    }),
-    [result, type]
-  );
-  const initialLiked = saved.has(savedPayload.id);
-  const hasCollections = saved.collections.length > 0;
-  const isSavedVariant = variant === "saved";
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [markedCollections, setMarkedCollections] = useState<string[]>(() =>
-    initialLiked && saved.activeCollectionId ? [saved.activeCollectionId] : []
-  );
-  const liked = initialLiked || markedCollections.length > 0;
-  const cardClassName =
-    variant === "saved"
-      ? "cursor-pointer hover:shadow-md transition-shadow min-w-[240px] sm:min-w-[280px] max-w-[280px] sm:max-w-[320px] flex-shrink-0"
-      : "cursor-pointer hover:shadow-md transition-shadow min-w-[240px] sm:min-w-[280px] max-w-[280px] sm:max-w-[320px] flex-shrink-0";
-
-  useEffect(() => {
-    const activeId = saved.activeCollectionId;
-    if (!activeId) return;
-    setMarkedCollections((prev) => {
-      if (initialLiked) {
-        return prev.includes(activeId) ? prev : [...prev, activeId];
-      }
-      return prev.filter((id) => id !== activeId);
-    });
-  }, [initialLiked, saved.activeCollectionId]);
-
-  const handleRemove = () => {
-    if (isSavedVariant) {
-      if (onRemove) onRemove();
-      else saved.remove(savedPayload.id);
-    } else {
-      saved.remove(savedPayload.id);
-      if (saved.activeCollectionId) {
-        setMarkedCollections((prev) =>
-          prev.filter((id) => id !== saved.activeCollectionId)
-        );
-      }
-    }
-  };
-
-  const handleSaveToCollection = async (collectionId: string) => {
-    try {
-      const alreadyMarked = markedCollections.includes(collectionId);
-      if (alreadyMarked) {
-        await saved.removeFromCollection(collectionId, savedPayload.id);
-        setMarkedCollections((prev) =>
-          prev.filter((id) => id !== collectionId)
-        );
-      } else {
-        await saved.addToCollection(collectionId, savedPayload);
-        setMarkedCollections((prev) => [...prev, collectionId]);
-      }
-    } catch (error) {
-      console.error("Failed to save result", error);
-    }
-  };
-
-  const handleCreateCollectionAndSave = async () => {
-    const name = window.prompt("Collection name");
-    const title = name?.trim();
-    if (!title) return;
-    try {
-      const newId = await saved.createCollection(title);
-      if (!newId) return;
-      await saved.addToCollection(newId, savedPayload);
-      setMarkedCollections((prev) => [...prev, newId]);
-      setMenuOpen(false);
-    } catch (error) {
-      console.error("Failed to create and save to collection", error);
-    }
-  };
-
-  // Hide save controls for uploaded user data
-  const isUploadedItem =
-    (savedPayload.source || result?.source) === "Uploaded file";
-
-  const ActionButton = () => {
-    if (isUploadedItem) return null;
-    if (isSavedVariant) {
-      return (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-400 hover:text-red-500"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleRemove();
-          }}
-          title="Remove from library"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      );
-    }
-
-    // Hide save button if user is not signed in
-    if (!user) return null;
-
-    return (
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={liked ? "text-blue-600" : "text-gray-400"}
-            onClick={(e) => e.stopPropagation()}
-            title={liked ? "Saved" : "Save result"}
-          >
-            {liked ? (
-              <Book className="w-4 h-4" />
-            ) : (
-              <BookDashed className="w-4 h-4" />
-            )}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          sideOffset={4}
-          className="w-56 text-xs"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {user ? (
-            <>
-              <DropdownMenuLabel className="flex items-center justify-between text-[11px] text-gray-500">
-                <span>Save to collection</span>
-                <button
-                  type="button"
-                  className="p-1 text-gray-400 hover:text-gray-600"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setMenuOpen(false);
-                  }}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </DropdownMenuLabel>
-
-              {hasCollections && (
-                <>
-                  {saved.collections.map((collection) => (
-                    <DropdownMenuItem
-                      key={collection.id}
-                      className="flex items-center justify-between gap-2 text-[11px]"
-                      onSelect={(event) => {
-                        event.preventDefault();
-                        void handleSaveToCollection(collection.id);
-                      }}
-                    >
-                      <span>{collection.title}</span>
-                      {markedCollections.includes(collection.id) && (
-                        <Check className="h-3 w-3 text-green-500" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                </>
-              )}
-
-              <DropdownMenuItem
-                className="text-[11px]"
-                onSelect={(event) => {
-                  event.preventDefault();
-                  void handleCreateCollectionAndSave();
-                }}
-              >
-                {hasCollections
-                  ? "New collection…"
-                  : "Create collection to save"}
-              </DropdownMenuItem>
-            </>
-          ) : (
-            <DropdownMenuItem
-              className="text-[11px]"
-              onSelect={(event) => {
-                event.preventDefault();
-                saved.toggle(savedPayload);
-              }}
-            >
-              {liked ? "Remove from saved" : "Save locally"}
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  };
-
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
     } catch (err) {
-      console.error("Failed to copy text: ", err);
     }
   };
 
@@ -694,34 +1039,66 @@ export const SearchResultCard = ({
     return (
       <>
         <Card
-          data-result-id={result.id}
-          data-tool={type}
-          className={cardClassName}
+          className="cursor-pointer hover:shadow-md transition-shadow min-w-[240px] sm:min-w-[280px] max-w-[280px] sm:max-w-[320px] flex-shrink-0 py-2"
           onClick={() => setIsDialogOpen(true)}
         >
-          <CardContent className="h-full">
-            <div className="flex flex-col justify-between space-y-2 h-full">
-              <div>
+          <CardContent className="h-full p-3">
+            <div className="flex gap-2.5 h-full">
+              {/* Favicon on left */}
+              <div className="flex-shrink-0 pt-0.5">
+                {type === "patent" ? (
+                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden p-0.5">
+                    <img
+                      src="/assets/banner/uspto.png"
+                      alt="USPTO"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                ) : type === "literature" ? (
+                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                    <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                ) : type === "drug" ? (
+                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                    <Search className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                ) : type === "clinical" ? (
+                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                    <Search className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                ) : (
+                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                    <Favicon
+                      url={result.url}
+                      size={12}
+                      className="w-3 h-3"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Content on right */}
+              <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                {/* Title and external link */}
                 <div className="flex items-start justify-between gap-2">
-                  <h4 className="font-medium text-sm line-clamp-2 text-gray-900 dark:text-gray-100">
-                    {typeof result.title === "string"
-                      ? result.title
-                      : String(result.title)}
+                  <h4 className="font-semibold text-sm leading-tight line-clamp-2 text-gray-900 dark:text-gray-100">
+                    {result.title}
                   </h4>
-                  <div className="flex items-center gap-2 ml-2">
-                    <ActionButton />
+                  <ExternalLink className="h-3 w-3 text-gray-400 flex-shrink-0 mt-0.5" />
+                </div>
+
+                {/* Markdown preview with separator */}
+                <div className="flex flex-col gap-1">
+                  <div className="h-px bg-gray-200 dark:bg-gray-800" />
+                  <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-snug">
+                    {result.summary?.slice(0, 120) || ''}
                   </div>
                 </div>
 
-                <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-3">
-                  {result.summary}
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-1">
-                <div className="flex items-center gap-2">
+                {/* Metadata badges */}
+                <div className="flex items-center gap-1.5 mt-auto">
                   <span
-                    className={`px-2 py-0.5 rounded text-xs ${
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                       result.isStructured
                         ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                         : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
@@ -729,9 +1106,7 @@ export const SearchResultCard = ({
                   >
                     {result.dataType}
                   </span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <span className="truncate px-2 rounded text-xs bg-gray-100 dark:bg-gray-800 py-0.5 max-w-[150px]">
+                  <span className="text-[10px] text-gray-500 dark:text-gray-500 truncate">
                     {(() => {
                       try {
                         const url = new URL(result.url);
@@ -750,11 +1125,7 @@ export const SearchResultCard = ({
         <VirtualizedContentDialog
           open={isDialogOpen}
           onOpenChange={setIsDialogOpen}
-          title={
-            typeof result.title === "string"
-              ? result.title
-              : String(result.title)
-          }
+          title={result.title}
           content={content}
           isJson={result.isStructured}
         />
@@ -762,38 +1133,67 @@ export const SearchResultCard = ({
     );
   }
 
-  // Non-virtualized card
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
-        <Card
-          data-result-id={result.id}
-          data-tool={type}
-          className={cardClassName}
-        >
-          <CardContent className="h-full">
-            <div className="flex flex-col justify-between space-y-2 h-full">
-              <div>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow min-w-[240px] sm:min-w-[280px] max-w-[280px] sm:max-w-[320px] flex-shrink-0 py-2">
+          <CardContent className="h-full p-3">
+            <div className="flex gap-2.5 h-full">
+              {/* Favicon on left */}
+              <div className="flex-shrink-0 pt-0.5">
+                {type === "patent" ? (
+                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden p-0.5">
+                    <img
+                      src="/assets/banner/uspto.png"
+                      alt="USPTO"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                ) : type === "literature" ? (
+                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                    <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                ) : type === "drug" ? (
+                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                    <Search className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                ) : type === "clinical" ? (
+                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                    <Search className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                ) : (
+                  <div className="w-5 h-5 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                    <Favicon
+                      url={result.url}
+                      size={12}
+                      className="w-3 h-3"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Content on right */}
+              <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                {/* Title and external link */}
                 <div className="flex items-start justify-between gap-2">
-                  <h4 className="font-medium text-sm line-clamp-2 text-gray-900 dark:text-gray-100">
-                    {typeof result.title === "string"
-                      ? result.title
-                      : String(result.title)}
+                  <h4 className="font-semibold text-sm leading-tight line-clamp-2 text-gray-900 dark:text-gray-100">
+                    {result.title}
                   </h4>
-                  <div className="flex items-center gap-2 ml-2">
-                    <ActionButton />
+                  <ExternalLink className="h-3 w-3 text-gray-400 flex-shrink-0 mt-0.5" />
+                </div>
+
+                {/* Markdown preview with separator */}
+                <div className="flex flex-col gap-1">
+                  <div className="h-px bg-gray-200 dark:bg-gray-800" />
+                  <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-snug">
+                    {result.summary?.slice(0, 120) || ''}
                   </div>
                 </div>
 
-                <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-3">
-                  {result.summary}
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-1">
-                <div className="flex items-center gap-2">
+                {/* Metadata badges */}
+                <div className="flex items-center gap-1.5 mt-auto">
                   <span
-                    className={`px-2 py-0.5 rounded text-xs ${
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                       result.isStructured
                         ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                         : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
@@ -801,9 +1201,7 @@ export const SearchResultCard = ({
                   >
                     {result.dataType}
                   </span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-gray-500 pl-2">
-                  <span className="truncate px-2 rounded text-xs bg-gray-100 dark:bg-gray-800 py-0.5 max-w-[150px]">
+                  <span className="text-[10px] text-gray-500 dark:text-gray-500 truncate">
                     {(() => {
                       try {
                         const urlObj = new URL(result.url);
@@ -820,7 +1218,7 @@ export const SearchResultCard = ({
         </Card>
       </DialogTrigger>
 
-      <DialogContent className="w-[95vw] sm:w-[85vw] max-h-[80vh] overflow-hidden">
+      <DialogContent className="!max-w-4xl max-h-[80vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className=" pr-8">{result.title}</DialogTitle>
           <Separator />
@@ -833,19 +1231,18 @@ export const SearchResultCard = ({
                   {(result.relevanceScore * 100).toFixed(0)}% relevance
                 </span>
               )}
-              {result.doi && (
-                <span className="text-xs bg-amber-100 dark:bg-amber-800/30 text-amber-700 dark:text-amber-300 px-2 py-1 rounded">
+              {type === "literature" && result.doi && (
+                <span className="text-xs bg-indigo-100 dark:bg-indigo-800/30 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded">
                   DOI: {result.doi}
                 </span>
               )}
             </div>
 
-            {(result.authors || result.citation) && (
+            {type === "literature" && (result.authors || result.citation) && (
               <div className="space-y-1">
                 {result.authors && result.authors.length > 0 && (
                   <div className="text-xs text-gray-600 dark:text-gray-400">
-                    <span className="font-medium">Authors:</span>{" "}
-                    {result.authors.join(", ")}
+                    <span className="font-medium">Authors:</span> {result.authors.join(", ")}
                   </div>
                 )}
                 {result.citation && (
@@ -863,6 +1260,11 @@ export const SearchResultCard = ({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 dark:text-blue-400"
               >
+                <Favicon
+                  url={result.url}
+                  size={16}
+                  className="w-3.5 h-3.5"
+                />
                 <ExternalLink className="h-3 w-3" />
                 View Source
               </a>
@@ -974,222 +1376,25 @@ export const SearchResultCard = ({
   );
 };
 
-// Compact card for previously fetched items
-const PreviouslyFetchedCard = ({
-  result,
-  originalMessageId,
-  toolName,
-}: {
-  result: any;
-  originalMessageId: string;
-  toolName?: string;
-}) => {
-  const handleScrollToOriginal = () => {
-    // Always force a scroll, even if already in view
-    const container = document.querySelector(
-      `[data-message-id="${originalMessageId}"]`
-    ) as HTMLElement | null;
-    if (!container) return;
-
-    // Find the result card inside the message
-    const rawId = String(result?.id ?? "");
-    if (!rawId) return;
-    const escaped =
-      (window as any).CSS && (CSS as any).escape
-        ? (CSS as any).escape(rawId)
-        : rawId.replace(/"/g, '\\"');
-    const baseSelector = `[data-result-id="${escaped}"]`;
-    const toolSelector = toolName ? `[data-tool="${toolName}"]` : "";
-    const selector = toolSelector
-      ? `${toolSelector}${baseSelector}`
-      : baseSelector;
-
-    // Only try to find the target result card inside this message
-    const target = container.querySelector(selector) as HTMLElement | null;
-    if (!target) {
-      return;
-    }
-
-    // Find the carousel scroller (prefer same tool)
-    const scrollerSelector = toolSelector
-      ? `[data-carousel="results"][data-tool="${toolName}"][data-message-id="${originalMessageId}"]`
-      : `[data-carousel="results"][data-message-id="${originalMessageId}"]`;
-    let scroller = (target.closest(scrollerSelector) ||
-      container.querySelector(scrollerSelector)) as HTMLElement | null;
-    if (!scroller) {
-      scroller = (target.closest('[data-carousel="results"]') ||
-        container.querySelector(
-          '[data-carousel="results"]'
-        )) as HTMLElement | null;
-    }
-
-    // Always scroll the message into view vertically first (centered)
-    // Force scroll even if already in view by using block: "center" and scroll-behavior: "auto" first, then "smooth"
-    const tRect = target.getBoundingClientRect();
-    const absoluteTop = window.scrollY + tRect.top;
-    const top = Math.max(
-      0,
-      absoluteTop - (window.innerHeight - target.clientHeight) / 2
-    );
-    window.scrollTo({ top, behavior: "auto" });
-    setTimeout(() => window.scrollTo({ top, behavior: "smooth" }), 10);
-
-    // After a short delay, scroll the carousel horizontally to center the card, then highlight
-    setTimeout(() => {
-      // Always scroll the result card into view (centered horizontally in carousel if possible)
-      if (scroller && target) {
-        try {
-          const tRect = target.getBoundingClientRect();
-          const sRect = scroller.getBoundingClientRect();
-          const absoluteLeft = scroller.scrollLeft + (tRect.left - sRect.left);
-          const left = Math.max(
-            0,
-            absoluteLeft - (scroller.clientWidth - target.clientWidth) / 2
-          );
-          // Force scroll by first jumping, then smooth scroll
-          scroller.scrollTo({ left, behavior: "auto" });
-          setTimeout(() => {
-            scroller.scrollTo({ left, behavior: "smooth" });
-          }, 10);
-        } catch {
-          // Fallback when smooth options not supported
-          target.scrollIntoView({
-            behavior: "auto",
-            inline: "center",
-            block: "nearest",
-          } as ScrollIntoViewOptions);
-          setTimeout(() => {
-            target.scrollIntoView({
-              behavior: "smooth",
-              inline: "center",
-              block: "nearest",
-            } as ScrollIntoViewOptions);
-          }, 10);
-        }
-      }
-      // Always scroll the card into view (in case not visible)
-
-      // Brief purple highlight
-      const highlight = [
-        "shadow-[0_0_0_6px_rgba(168,85,247,0.7)]",
-        "ring-4",
-        "ring-purple-400",
-        "animate-pulse",
-      ];
-      target.classList.add(...highlight);
-      setTimeout(() => {
-        target.classList.remove(...highlight);
-      }, 2000);
-    }, 200); // Slightly longer delay to allow vertical scroll to finish
-  };
-  console.log("scrolled to original data:", originalMessageId);
-
-  return (
-    <Card className="min-w-[240px] sm:min-w-[280px] max-w-[280px] sm:max-w-[320px] flex-shrink-0 border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700">
-      <CardContent className="py-3">
-        <div className="flex flex-col gap-2">
-          <div className="text-xs font-medium text-amber-800 dark:text-amber-200 flex items-center gap-2">
-            <Clock className="h-3 w-3" />
-            Previously fetched in this chat
-          </div>
-          <div className="text-sm text-gray-900 dark:text-gray-100 line-clamp-2">
-            {typeof result.title === "string"
-              ? result.title
-              : String(result.title)}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-xs"
-              onClick={handleScrollToOriginal}
-            >
-              Jump to original
-            </Button>
-            {result.url && (
-              <a
-                href={result.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 text-xs"
-              >
-                <ExternalLink className="h-3 w-3" />
-                Source
-              </a>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
 // Search Results Carousel Component
 const SearchResultsCarousel = ({
   results,
   type,
-  messageId,
-  toolName,
 }: {
   results: any[];
-  type: "web";
-  messageId: string;
-  toolName?: string;
+  type: "clinical" | "drug" | "literature" | "web" | "patent";
 }) => {
-  const seen = useSeenResults();
   const scrollRef = useRef<HTMLDivElement>(null);
   const imagesScrollRef = useRef<HTMLDivElement>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showAllImages, setShowAllImages] = useState(false);
 
-  // Local, within-query dedupe to remove accidental repeats before rendering
-  const normalizeUrlClient = (url?: string) => {
-    if (!url) return "";
-    try {
-      const u = new URL(url);
-      u.hash = "";
-      // strip common tracking params
-      const toDelete: string[] = [];
-      u.searchParams.forEach((_, k) => {
-        if (k.startsWith("utm_") || k === "ref" || k === "ref_src")
-          toDelete.push(k);
-      });
-      toDelete.forEach((k) => u.searchParams.delete(k));
-      const host = u.host.toLowerCase();
-      const path = u.pathname.replace(/\/+$/, "");
-      const qs = u.searchParams.toString();
-      return `${u.protocol}//${host}${path}${qs ? `?${qs}` : ""}`;
-    } catch {
-      return (url || "").trim();
-    }
-  };
-
-  const dedupedResults = useMemo(() => {
-    const seenLocal = new Set<string>();
-    const out: any[] = [];
-    for (const r of results || []) {
-      const id = String(r?.id ?? "");
-      const key =
-        id ||
-        r.nctId ||
-        r.doi ||
-        normalizeUrlClient(r.url) ||
-        `${(r.title || "").toLowerCase()}|${(r.source || "").toLowerCase()}|${
-          r.date || ""
-        }`;
-      if (seenLocal.has(key)) continue;
-      seenLocal.add(key);
-      out.push(r);
-    }
-    return out;
-  }, [results]);
-
   // Extract all images from results
   const allImages: { url: string; title: string; sourceUrl: string }[] = [];
   const firstImages: { url: string; title: string; sourceUrl: string }[] = [];
 
-  dedupedResults.forEach((result) => {
+  results.forEach((result) => {
     let firstImageAdded = false;
     if (result.imageUrls && typeof result.imageUrls === "object") {
       Object.values(result.imageUrls).forEach((imageUrl: any) => {
@@ -1238,7 +1443,7 @@ const SearchResultsCarousel = ({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [dialogOpen, allImages.length, handleNext, handlePrev]);
 
-  if (dedupedResults.length === 0) {
+  if (results.length === 0) {
     return (
       <div className="text-center py-4 text-gray-500 dark:text-gray-400">
         No results found
@@ -1252,85 +1457,12 @@ const SearchResultsCarousel = ({
       <div className="relative">
         <div
           ref={scrollRef}
-          data-carousel="results"
-          data-tool={type}
-          data-message-id={messageId}
           className="flex gap-2 sm:gap-3 overflow-x-auto scrollbar-hide py-1 sm:py-2 px-1 sm:px-2"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {dedupedResults.map((result) => {
-            const resultId = String(result?.id ?? "");
-            // Register first-seen results in the session cache
-            if (resultId) {
-              if (!seen.has(resultId)) {
-                seen.setIfAbsent({
-                  id: resultId,
-                  tool: toolName || type,
-                  messageId,
-                  result,
-                });
-              }
-            }
-
-            // If we've seen this result in a previous message, show a compact reference card
-            const seenEntry = resultId ? seen.get(resultId) : undefined;
-            const isPreviouslyFetched =
-              seenEntry && seenEntry.messageId !== messageId;
-
-            // If we've seen this result in a previous message, show a compact reference card first
-            if (isPreviouslyFetched) {
-              return (
-                <PreviouslyFetchedCard
-                  key={result.id}
-                  result={result}
-                  originalMessageId={seenEntry!.messageId}
-                  toolName={type}
-                />
-              );
-            }
-
-            // Check if this is clinical trials data
-            if (
-              result.source === "valyu/valyu-clinical-trials" &&
-              result.fullContent
-            ) {
-              // Try to parse the content to check if it's valid clinical trial JSON
-              try {
-                const parsed =
-                  typeof result.fullContent === "string"
-                    ? JSON.parse(result.fullContent)
-                    : result.fullContent;
-                if (parsed.nct_id || parsed.brief_title) {
-                  // This is clinical trial data, use the special view
-                  return (
-                    <div
-                      key={result.id}
-                      data-result-id={result.id}
-                      data-tool={type}
-                      className="min-w-[280px] sm:min-w-[320px] max-w-[320px] sm:max-w-[380px] flex-shrink-0"
-                    >
-                      <ClinicalTrialsView
-                        result={{
-                          content: result.fullContent,
-                          title: result.title,
-                          url: result.url,
-                          source: result.source,
-                        }}
-                        mode="preview"
-                        height="300px"
-                      />
-                    </div>
-                  );
-                }
-              } catch (e) {
-                // Not valid clinical trial JSON, render as normal
-              }
-            }
-
-            return (
-              <SearchResultCard key={result.id} result={result} type={type} />
-            );
-          })}
+          {results.map((result) => (
+            <SearchResultCard key={result.id} result={result} type={type} />
+          ))}
         </div>
       </div>
 
@@ -1506,8 +1638,6 @@ export function ChatInterface({
   onSessionCreated,
   onNewChat,
   rateLimitProps,
-  fastMode: fastModeProp,
-  onFastModeChange,
 }: {
   sessionId?: string;
   onMessagesChange?: (hasMessages: boolean) => void;
@@ -1520,17 +1650,14 @@ export function ChatInterface({
     resetTime?: Date;
     increment: () => Promise<any>;
   };
-  fastMode?: boolean;
-  onFastModeChange?: (v: boolean) => void;
 }) {
   const [input, setInput] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  const [isTraceExpanded, setIsTraceExpanded] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
-  const [currentSessionId, setCurrentSessionId] = useState<string | undefined>(
-    undefined
-  );
+  const [currentSessionId, setCurrentSessionId] = useState<string | undefined>(undefined);
   const sessionIdRef = useRef<string | undefined>(undefined);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const userHasInteracted = useRef(false);
@@ -1538,53 +1665,20 @@ export function ChatInterface({
   const [isFormAtBottom, setIsFormAtBottom] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isStartingNewChat, setIsStartingNewChat] = useState(false);
-  const [showLibraryCard, setShowLibraryCard] = useState(false);
-  const [libraryCollectionId, setLibraryCollectionId] = useState<string | null>(
-    null
-  );
-  const [libraryContextItems, setLibraryContextItems] = useState<SavedItem[]>(
-    []
-  );
-  const [libraryContextExpanded, setLibraryContextExpanded] = useState(false);
-  const [contextResourceMap, setContextResourceMap] = useState<
-    Record<string, SavedItem[]>
-  >({});
-  const [fastMode, setFastMode] = useState(false);
-  const [inputMenuOpen, setInputMenuOpen] = useState(false);
-  const [showFileDropzone, setShowFileDropzone] = useState(false);
-  const [dropzoneFiles, setDropzoneFiles] = useState<File[] | undefined>(
-    undefined
-  );
-  const [uploadingFiles, setUploadingFiles] = useState<
-    Record<
-      string,
-      {
-        fileName: string;
-        abortController: AbortController;
-      }
-    >
-  >({});
-  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const libraryContextRef = useRef<SavedItem[]>([]);
-  const lastSentContextRef = useRef<SavedItem[]>([]);
-  const messageIdsRef = useRef<string[]>([]);
-  const effectiveFastMode = fastModeProp ?? fastMode;
-  const setEffectiveFastMode = onFastModeChange ?? setFastMode;
-  // Ref to always send the freshest fastMode to the API
-  const fastModeRef = useRef(false);
-  useEffect(() => {
-    fastModeRef.current = effectiveFastMode;
-  }, [effectiveFastMode]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [queryStartTime, setQueryStartTime] = useState<number | null>(null);
+  const [modelCompatibilityError, setModelCompatibilityError] = useState<{
+    message: string;
+    compatibilityIssue: string;
+  } | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [liveProcessingTime, setLiveProcessingTime] = useState<number>(0);
+
+  // Live reasoning preview - no longer needed as global state
+  // Each reasoning component will handle its own preview based on streaming state
 
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
-  const {
-    collections: savedCollections,
-    items: savedItems,
-    activeCollectionId: savedActiveCollectionId,
-    setActiveCollection,
-  } = useSavedResults();
   // Rate limit props passed from parent
   const { allowed, remaining, resetTime, increment } = rateLimitProps || {};
   const canSendQuery = allowed;
@@ -1597,1018 +1691,203 @@ export function ChatInterface({
     },
     onMutate: async () => {
       // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ["rateLimit"] });
-
+      await queryClient.cancelQueries({ queryKey: ['rateLimit'] });
+      
       // Snapshot previous value
-      const previousData = queryClient.getQueryData(["rateLimit"]);
-
+      const previousData = queryClient.getQueryData(['rateLimit']);
+      
       // Optimistically update
-      queryClient.setQueryData(["rateLimit"], (old: any) => {
+      queryClient.setQueryData(['rateLimit'], (old: any) => {
         if (!old) return old;
         return {
           ...old,
           used: (old.used || 0) + 1,
           remaining: Math.max(0, (old.remaining || 0) - 1),
-          allowed: (old.used || 0) + 1 < (old.limit || 5),
+          allowed: (old.used || 0) + 1 < (old.limit || 5)
         };
       });
-
+      
       return { previousData };
     },
     onError: (err, variables, context) => {
       // Rollback on error
       if (context?.previousData) {
-        queryClient.setQueryData(["rateLimit"], context.previousData);
+        queryClient.setQueryData(['rateLimit'], context.previousData);
       }
     },
     // No onSettled - let the optimistic update persist until chat finishes
   });
 
-  const openLibraryCard = useCallback(() => {
-    setShowLibraryCard(true);
-    setInputMenuOpen(false);
-  }, []);
 
-  const formatFileSize = useCallback((bytes: number) => {
-    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    const exponent = Math.min(
-      units.length - 1,
-      Math.floor(Math.log(bytes) / Math.log(1024))
-    );
-    const size = bytes / Math.pow(1024, exponent);
-    const precision = size >= 10 || exponent === 0 ? 0 : 1;
-    return `${size.toFixed(precision)} ${units[exponent]}`;
-  }, []);
-
-  const createSavedItemFromFile = useCallback(
-    (file: File): SavedItem => {
-      const uniqueId =
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-      return {
-        id: `upload-${uniqueId}`,
-        title: file.name || "Untitled file",
-        source: "Uploaded file",
-        type: "web",
-        date:
-          typeof file.lastModified === "number"
-            ? new Date(file.lastModified).toISOString()
-            : undefined,
-        data: {
-          summary: `User uploaded file (${formatFileSize(file.size)}).`,
-          fileName: file.name,
-          size: file.size,
-          mimeType: file.type,
-        },
-      } satisfies SavedItem;
-    },
-    [formatFileSize]
-  );
-
-  const uploadSingleFile = useCallback(
-    async (file: File, signal?: AbortSignal) => {
-      try {
-        const form = new FormData();
-        form.append("files", file);
-        const res = await fetch("/api/uploads", {
-          method: "POST",
-          body: form,
-          signal,
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
-        const result = data?.files?.[0];
-        if (!result) return null;
-
-        return {
-          url: result.url,
-          signedUrl: result.signedUrl,
-          publicUrl: result.publicUrl,
-          extractedText: result.extractedText,
-        };
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          console.log("Upload cancelled by user");
-          return null; // Return null if cancelled
-        }
-        return null;
-      }
-    },
-    []
-  );
-
-  const uploadFilesAndAnnotate = useCallback(
-    async (files: File[], signal?: AbortSignal) => {
-      try {
-        const form = new FormData();
-        for (const f of files) form.append("files", f);
-        const res = await fetch("/api/uploads", {
-          method: "POST",
-          body: form,
-          signal,
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
-        const map: Record<
-          string,
-          {
-            url?: string;
-            signedUrl?: string;
-            publicUrl?: string;
-            extractedText?: string;
-          }
-        > = {};
-        for (const r of data?.files || []) {
-          map[r.name] = {
-            url: r.url,
-            signedUrl: r.signedUrl,
-            publicUrl: r.publicUrl,
-            extractedText: r.extractedText,
-          };
-        }
-        return map;
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          console.log("Upload cancelled by user");
-          return null;
-        }
-        return null;
-      }
-    },
-    []
-  );
-
-  const handleIncomingFiles = useCallback(
-    async (files: File[]) => {
-      if (!files?.length) return;
-
-      console.log(
-        "[Chat Interface] Processing files:",
-        files.map((f) => f.name)
-      );
-
-      // Process each file individually
-      for (const file of files) {
-        const fileId = `${file.name}-${Date.now()}`;
-        const abortController = new AbortController();
-
-        // Add to uploading files state
-        setUploadingFiles((prev) => ({
-          ...prev,
-          [fileId]: {
-            fileName: file.name,
-            abortController,
-          },
-        }));
-
-        try {
-          const result = await uploadSingleFile(file, abortController.signal);
-
-          if (result) {
-            // Create saved item for successful upload
-            const base = createSavedItemFromFile(file);
-            const extractedText = result.extractedText;
-
-            console.log(
-              `[Chat Interface] File ${file.name} extracted text length:`,
-              extractedText?.length || 0
-            );
-
-            const newItem = {
-              ...base,
-              data: {
-                ...((base.data as any) || {}),
-                extractedText,
-                summary: extractedText
-                  ? `User uploaded file (${formatFileSize(
-                      file.size
-                    )}). Extracted text: ${extractedText.substring(0, 200)}${
-                      extractedText.length > 200 ? "..." : ""
-                    }`
-                  : `User uploaded file (${formatFileSize(file.size)}).`,
-              },
-            } as SavedItem;
-
-            setLibraryContextItems((prev) => {
-              const next = [...prev, newItem];
-              console.log(
-                "[Chat Interface] Updated library context items:",
-                next.length
-              );
-              return next;
-            });
-          } else {
-            console.log(
-              `[Chat Interface] Upload was cancelled or failed for ${file.name}`
-            );
-          }
-        } catch (error) {
-          console.error(
-            `[Chat Interface] Error processing file ${file.name}:`,
-            error
-          );
-        } finally {
-          // Remove from uploading files state
-          setUploadingFiles((prev) => {
-            const { [fileId]: removed, ...rest } = prev;
-            return rest;
-          });
-        }
-      }
-    },
-    [createSavedItemFromFile, uploadSingleFile, formatFileSize]
-  );
-
-  const cancelUpload = useCallback(() => {
-    // Cancel all file uploads
-    setUploadingFiles((prev) => {
-      Object.values(prev).forEach((fileUpload) => {
-        fileUpload.abortController.abort();
-      });
-      return {};
-    });
-  }, []);
-
-  const cancelFileUpload = useCallback((fileId: string) => {
-    setUploadingFiles((prev) => {
-      const fileUpload = prev[fileId];
-      if (fileUpload) {
-        fileUpload.abortController.abort();
-        const { [fileId]: removed, ...rest } = prev;
-        return rest;
-      }
-      return prev;
-    });
-  }, []);
-
-  const handleFileDrop = useCallback(
-    (acceptedFiles: File[]) => {
-      if (!acceptedFiles.length) return;
-      setDropzoneFiles(acceptedFiles);
-      // trigger async upload + context append
-      void handleIncomingFiles(acceptedFiles);
-      setShowFileDropzone(false);
-    },
-    [handleIncomingFiles]
-  );
-
-  const handleFileMenuSelect = useCallback(() => {
-    setDropzoneFiles(undefined);
-    setShowFileDropzone(true);
-    setInputMenuOpen(false);
-  }, []);
-
-  const closeFileDropzone = useCallback(() => {
-    setShowFileDropzone(false);
-  }, []);
-
-  const handleAddLibraryContext = useCallback((item: SavedItem) => {
-    setLibraryContextItems((prev) => {
-      if (prev.some((existing) => existing.id === item.id)) {
-        return prev;
-      }
-      return [...prev, item];
-    });
-  }, []);
-
-  const handleRemoveLibraryContext = useCallback((id: string) => {
-    setLibraryContextItems((prev) => prev.filter((item) => item.id !== id));
-  }, []);
-
-  const handleClearLibraryContext = useCallback(() => {
-    setLibraryContextItems([]);
-    setLibraryContextExpanded(false);
-    libraryContextRef.current = [];
-    setDropzoneFiles(undefined);
-  }, []);
-
-  const handleLibraryCollectionChange = useCallback(
-    (value: string) => {
-      setLibraryCollectionId(value);
-      if (value !== savedActiveCollectionId) {
-        setActiveCollection(value);
-      }
-    },
-    [savedActiveCollectionId, setActiveCollection]
-  );
-
-  const summariseSavedItem = useCallback((item: SavedItem) => {
-    if (!item?.data) return "";
-    const data = item.data as any;
-
-    const candidates = [
-      data?.extractedText, // Prioritize extracted text from uploaded files
-      data?.fullContent,
-      data?.summary,
-      data?.brief_summary,
-      data?.content,
-      data?.description,
-    ];
-
-    for (const candidate of candidates) {
-      if (typeof candidate === "string" && candidate.trim()) {
-        const trimmed = candidate.trim();
-        return trimmed.length > 4000 ? `${trimmed.slice(0, 4000)}…` : trimmed;
-      }
-    }
-
-    if (typeof data === "string") {
-      const trimmed = data.trim();
-      return trimmed.length > 4000 ? `${trimmed.slice(0, 4000)}…` : trimmed;
-    }
-
-    try {
-      const json = JSON.stringify(data, null, 2);
-      if (!json) return "";
-      return json.length > 4000 ? `${json.slice(0, 4000)}…` : json;
-    } catch (error) {
-      return "";
-    }
-  }, []);
-
-  const formatSavedItemForCard = useCallback((item: SavedItem) => {
-    const data = (item.data as Record<string, any>) || {};
-
-    const fullContentRaw = (() => {
-      if (typeof data.fullContent === "string") return data.fullContent;
-      if (data.fullContent) return JSON.stringify(data.fullContent, null, 2);
-      if (typeof data.content === "string") return data.content;
-      if (typeof data.summary === "string") return data.summary;
-      if (typeof data.brief_summary === "string") return data.brief_summary;
-      return "";
-    })();
-
-    const fullContent = fullContentRaw || "";
-
-    const summary =
-      data.summary ??
-      data.brief_summary ??
-      (typeof fullContent === "string" ? fullContent.slice(0, 240) : "");
-
-    return {
-      ...data,
-      id: item.id,
-      title:
-        typeof item.title === "string" && item.title.trim()
-          ? item.title
-          : data.title ?? "Untitled result",
-      summary,
-      fullContent,
-      url: item.url ?? data.url ?? "",
-      source: item.source ?? data.source ?? "",
-      date: item.date ?? data.date ?? "",
-      dataType: data.dataType ?? item.type ?? "unstructured",
-      isStructured:
-        typeof data.isStructured === "boolean"
-          ? data.isStructured
-          : data.dataType === "structured",
-      imageUrls: data.imageUrls ?? data.image_url ?? {},
-      relevanceScore: data.relevanceScore ?? data.relevance_score ?? 0,
-      doi: data.doi ?? data.metadata?.doi,
-      authors: data.authors,
-      citation: data.citation,
-      nctId: data.nctId ?? data.nct_id,
-      status: data.status,
-      phase: data.phase,
-      enrollment: data.enrollment,
-      conditions: data.conditions,
-      interventions: data.interventions,
-      type: item.type ?? (data.type as SavedItem["type"]) ?? "web",
-    };
-  }, []);
-
-  const buildLibraryContextInstruction = useCallback(
-    (question: string, items: SavedItem[]) => {
-      if (items.length === 0) return question;
-
-      console.log(
-        "[Chat Interface] Building context instruction with items:",
-        items.length
-      );
-      items.forEach((item, index) => {
-        const details = summariseSavedItem(item);
-        console.log(
-          `[Chat Interface] Context item ${index + 1}: ${
-            item.title
-          }, content length: ${details?.length || 0}`
-        );
-      });
-
-      const contextBlocks = items.map((item, index) => {
-        const details = summariseSavedItem(item);
-        const lines = [
-          `Context [${index + 1}]`,
-          `Title: ${item.title || "Untitled result"}`,
-          item.source ? `Source: ${item.source}` : null,
-          item.date ? `Date: ${item.date}` : null,
-          item.url ? `URL: ${item.url}` : null,
-          details ? `Full Content:\n${details}` : null,
-        ].filter(Boolean);
-        return lines.join("\n");
-      });
-
-      const enrichedText = `You must ground your answer in the provided saved context. Reference the content explicitly and do not ignore it. Use the user's natural-language question verbatim in your answer.\n\n${contextBlocks.join(
-        "\n\n"
-      )}\n\n[USER PROMPT]\n${question}`;
-
-      console.log(
-        "[Chat Interface] Enriched text length:",
-        enrichedText.length
-      );
-      return enrichedText;
-    },
-    [summariseSavedItem]
-  );
-
-  const renderLibraryItems = useCallback(
-    (items: SavedItem[]) => {
-      if (!items || items.length === 0) {
-        return (
-          <div className="p-6 text-sm text-center text-gray-500 dark:text-gray-400">
-            No saved results available yet.
-          </div>
-        );
-      }
-
-      return (
-        <div className="divide-y divide-gray-200 dark:divide-gray-800">
-          {items.map((item) => (
-            <div key={item.id} className="p-4 space-y-2">
-              <div className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">
-                {item.title || "Untitled result"}
-              </div>
-              {(item.source || item.date) && (
-                <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-2">
-                  {item.source ? <span>{item.source}</span> : null}
-                  {item.source && item.date ? <span>•</span> : null}
-                  {item.date ? <span>{item.date}</span> : null}
-                </div>
-              )}
-              {typeof item.data?.summary === "string" &&
-                item.data.summary.trim() && (
-                  <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-3">
-                    {item.data.summary.trim()}
-                  </p>
-                )}
-              <div className="flex items-center justify-between gap-2 pt-2">
-                {item.url ? (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    Open source
-                  </a>
-                ) : (
-                  <span />
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto px-0 text-xs font-normal text-blue-600 hover:bg-gray-200/90 dark:text-blue-300 dark:hover:bg-gray-800/90 hover:py-2 dark:hover:py-2"
-                  type="button"
-                  onClick={() => handleAddLibraryContext(item)}
-                  disabled={libraryContextItems.some(
-                    (existing) => existing.id === item.id
-                  )}
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  {libraryContextItems.some(
-                    (existing) => existing.id === item.id
-                  )
-                    ? "Added"
-                    : "Add to chat"}
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    },
-    [handleAddLibraryContext, libraryContextItems]
-  );
-
-  useEffect(() => {
-    if (!showLibraryCard) return;
-
-    if (!savedCollections || savedCollections.length === 0) {
-      if (libraryCollectionId !== null) {
-        setLibraryCollectionId(null);
-      }
-      return;
-    }
-
-    const selectionIsValid =
-      libraryCollectionId !== null &&
-      savedCollections?.some(
-        (collection) => collection.id === libraryCollectionId
-      );
-
-    if (!selectionIsValid) {
-      const fallbackId =
-        (savedActiveCollectionId &&
-        savedCollections?.some(
-          (collection) => collection.id === savedActiveCollectionId
-        )
-          ? savedActiveCollectionId
-          : savedCollections?.[0]?.id) ?? null;
-
-      if (fallbackId && libraryCollectionId !== fallbackId) {
-        setLibraryCollectionId(fallbackId);
-      }
-
-      if (fallbackId && fallbackId !== savedActiveCollectionId) {
-        setActiveCollection(fallbackId);
-      }
-      return;
-    }
-
-    if (
-      libraryCollectionId &&
-      libraryCollectionId !== savedActiveCollectionId
-    ) {
-      setActiveCollection(libraryCollectionId);
-    }
-  }, [
-    showLibraryCard,
-    savedCollections,
-    savedActiveCollectionId,
-    libraryCollectionId,
-    setActiveCollection,
-  ]);
-
-  const resolvedLibraryCollectionId = useMemo(() => {
-    if (libraryCollectionId) return libraryCollectionId;
-    if (
-      savedActiveCollectionId &&
-      savedCollections?.some(
-        (collection) => collection.id === savedActiveCollectionId
-      )
-    ) {
-      return savedActiveCollectionId;
-    }
-    return savedCollections?.[0]?.id ?? null;
-  }, [libraryCollectionId, savedActiveCollectionId, savedCollections]);
-
-  const librarySelectionPending =
-    (savedCollections?.length || 0) > 0 &&
-    libraryCollectionId !== null &&
-    libraryCollectionId !== savedActiveCollectionId;
-
-  const libraryContextBanner = useMemo(() => {
-    if (libraryContextItems.length === 0) return null;
-
-    const shorten = (title?: string | null) => {
-      const base = (title || "Untitled result").trim();
-      return base.length > 48 ? `${base.slice(0, 45)}…` : base;
-    };
-
-    return (
-      <div className="rounded-xl border border-blue-200 bg-blue-50/80 px-3 py-2 text-blue-800 shadow-sm dark:border-blue-800/70 dark:bg-blue-900/20 dark:text-blue-200">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-semibold uppercase tracking-wide">
-            Context queued for next answer
-          </span>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setLibraryContextExpanded((prev) => !prev)}
-              className="text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-300"
-            >
-              {libraryContextExpanded ? "Collapse" : "Expand"}
-            </button>
-            <button
-              type="button"
-              onClick={handleClearLibraryContext}
-              className="text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-300"
-            >
-              Clear all
-            </button>
-          </div>
-        </div>
-        <div
-          className={`mt-2 overflow-y-auto pr-1 space-y-2 ${
-            libraryContextExpanded ? "max-h-160" : "max-h-12"
-          }`}
-        >
-          {libraryContextItems.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between gap-2 rounded-full border border-blue-200 bg-white/70 px-2 py-1 text-[11px] font-medium text-blue-700 shadow-sm dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-200"
-            >
-              <span className="truncate max-w-[calc(100%-1.5rem)]">
-                {shorten(item.title)}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleRemoveLibraryContext(item.id)}
-                className="text-blue-600 transition-colors hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-50"
-                aria-label={`Remove ${item.title ?? "context"}`}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }, [
-    libraryContextItems,
-    libraryContextExpanded,
-    handleClearLibraryContext,
-    handleRemoveLibraryContext,
-  ]);
-
-  const { selectedModel } = useOllama();
+  const { selectedModel, selectedProvider } = useLocalProvider();
   const user = useAuthStore((state) => state.user);
+  const subscription = useSubscription();
+
+  // Auth modal state for paywalls
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Signup prompt for non-authenticated users
+  const [showSignupPrompt, setShowSignupPrompt] = useState(false);
+
+  // Listen for global auth modal trigger (from sidebar, etc.)
+  useEffect(() => {
+    const handleShowAuthModal = () => setShowAuthModal(true);
+    window.addEventListener('show-auth-modal', handleShowAuthModal);
+    return () => window.removeEventListener('show-auth-modal', handleShowAuthModal);
+  }, []);
 
   // Session management functions
   const generateSessionTitle = useCallback((firstMessage: string): string => {
     // Create a smart title from the first user message
     const cleaned = firstMessage.trim();
-
-    // Financial keywords to prioritize in titles
-    const financialKeywords = [
-      "stock",
-      "stocks",
-      "share",
-      "shares",
-      "equity",
-      "portfolio",
-      "investment",
-      "invest",
-      "market",
-      "trading",
-      "trader",
-      "dividend",
-      "earnings",
-      "revenue",
-      "profit",
-      "loss",
-      "crypto",
-      "bitcoin",
-      "ethereum",
-      "cryptocurrency",
-      "finance",
-      "financial",
-      "analysis",
-      "valuation",
-      "dcf",
-      "ratio",
-      "ratios",
-      "balance sheet",
-      "income statement",
-      "cash flow",
-      "ipo",
-      "merger",
-      "acquisition",
-      "bonds",
-      "yield",
-      "interest",
-      "rate",
-      "fed",
-      "inflation",
-      "gdp",
-      "recession",
-      "bull",
-      "bear",
-      "volatility",
-      "risk",
-      "return",
-    ];
-
-    // Company/ticker patterns
-    const tickerPattern = /\b[A-Z]{1,5}\b/g;
-    const dollarPattern = /\$[A-Z]{1,5}\b/g;
-
-    // Extract potential tickers or companies mentioned
-    const tickers = [
-      ...(cleaned.match(tickerPattern) || []),
-      ...(cleaned.match(dollarPattern) || []),
+    
+    // Biomedical keywords to prioritize in titles
+    const biomedKeywords = [
+      'drug', 'drugs', 'medication', 'clinical', 'trial', 'trials', 'study', 'studies',
+      'patient', 'patients', 'disease', 'therapy', 'treatment', 'diagnosis', 'cancer',
+      'covid', 'virus', 'vaccine', 'antibody', 'protein', 'gene', 'crispr', 'genome',
+      'fda', 'approval', 'phase', 'efficacy', 'safety', 'adverse', 'pubmed', 'research',
+      'molecular', 'cellular', 'pathology', 'pharmacology', 'immunotherapy', 'biomarker'
     ];
 
     if (cleaned.length <= 50) {
       return cleaned;
     }
 
-    // Try to find a sentence with financial context
+    // Try to find a sentence with biomedical context
     const sentences = cleaned.split(/[.!?]+/);
     for (const sentence of sentences) {
       const trimmed = sentence.trim();
       if (trimmed.length > 10 && trimmed.length <= 50) {
-        // Check if this sentence contains financial keywords or tickers
-        const hasFinancialContext =
-          financialKeywords.some((keyword) =>
-            trimmed.toLowerCase().includes(keyword.toLowerCase())
-          ) || tickers.some((ticker) => trimmed.includes(ticker));
+        // Check if this sentence contains biomedical keywords
+        const hasBiomedContext = biomedKeywords.some(keyword =>
+          trimmed.toLowerCase().includes(keyword.toLowerCase())
+        );
 
-        if (hasFinancialContext) {
+        if (hasBiomedContext) {
           return trimmed;
         }
       }
     }
-
-    // If we have tickers, try to create a title around them
-    if (tickers.length > 0) {
-      const firstTicker = tickers[0];
-      const tickerIndex = cleaned.indexOf(firstTicker);
-
-      // Try to get context around the ticker
-      const start = Math.max(0, tickerIndex - 20);
-      const end = Math.min(
-        cleaned.length,
-        tickerIndex + firstTicker.length + 20
-      );
-      const context = cleaned.substring(start, end);
-
-      if (context.length <= 50) {
-        return context.trim();
-      }
-    }
-
+    
     // Fall back to smart truncation
     const truncated = cleaned.substring(0, 47);
-    const lastSpace = truncated.lastIndexOf(" ");
-    const lastPeriod = truncated.lastIndexOf(".");
-    const lastQuestion = truncated.lastIndexOf("?");
-
+    const lastSpace = truncated.lastIndexOf(' ');
+    const lastPeriod = truncated.lastIndexOf('.');
+    const lastQuestion = truncated.lastIndexOf('?');
+    
     const breakPoint = Math.max(lastSpace, lastPeriod, lastQuestion);
-    const title =
-      breakPoint > 20 ? truncated.substring(0, breakPoint) : truncated;
-
-    return title + (title.endsWith(".") || title.endsWith("?") ? "" : "...");
+    const title = breakPoint > 20 ? truncated.substring(0, breakPoint) : truncated;
+    
+    return title + (title.endsWith('.') || title.endsWith('?') ? '' : '...');
   }, []);
 
-  const createSession = useCallback(
-    async (firstMessage: string): Promise<string | null> => {
-      if (!user) return null;
+  const createSession = useCallback(async (firstMessage: string): Promise<string | null> => {
+    if (!user) return null;
+    
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Use fast fallback title initially
+      const quickTitle = generateSessionTitle(firstMessage);
+      
+      // Create session immediately with fallback title
+      const response = await fetch('/api/chat/sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ title: quickTitle })
+      });
 
-      try {
-        const supabase = createClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+      if (response.ok) {
+        const { session: newSession } = await response.json();
+        
+        // Generate better AI title in background (don't wait)
+        const titleHeaders: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        };
 
-        // Use fast fallback title initially
-        const quickTitle = generateSessionTitle(firstMessage);
-
-        // Create session immediately with fallback title
-        const response = await fetch("/api/chat/sessions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({ title: quickTitle }),
-        });
-
-        if (response.ok) {
-          const { session: newSession } = await response.json();
-          console.log(
-            "[Chat Interface] Created new session quickly:",
-            newSession.id
-          );
-
-          // Generate better AI title in background (don't wait)
-          fetch("/api/chat/generate-title", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${session?.access_token}`,
-            },
-            body: JSON.stringify({ message: firstMessage }),
-          })
-            .then(async (titleResponse) => {
-              if (titleResponse.ok) {
-                const { title: aiTitle } = await titleResponse.json();
-                // Update session title in background
-                await fetch(`/api/chat/sessions/${newSession.id}`, {
-                  method: "PATCH",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${session?.access_token}`,
-                  },
-                  body: JSON.stringify({ title: aiTitle }),
-                });
-                console.log(
-                  "[Chat Interface] Updated session title with AI:",
-                  aiTitle
-                );
-              }
-            })
-            .catch(() => {
-              console.log(
-                "[Chat Interface] AI title generation failed, keeping fallback"
-              );
-            });
-
-          return newSession.id;
+        // Add Ollama preference header if in development mode
+        if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_APP_MODE === 'development') {
+          const ollamaEnabled = localStorage.getItem('ollama-enabled');
+          if (ollamaEnabled !== null) {
+            titleHeaders['x-ollama-enabled'] = ollamaEnabled;
+          }
         }
-      } catch (error) {
-        console.error("[Chat Interface] Failed to create session:", error);
+
+        fetch('/api/chat/generate-title', {
+          method: 'POST',
+          headers: titleHeaders,
+          body: JSON.stringify({ message: firstMessage })
+        }).then(async (titleResponse) => {
+          if (titleResponse.ok) {
+            const { title: aiTitle } = await titleResponse.json();
+            // Update session title in background
+            await fetch(`/api/chat/sessions/${newSession.id}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token}`
+              },
+              body: JSON.stringify({ title: aiTitle })
+            });
+          }
+        }).catch(() => {
+        });
+        
+        return newSession.id;
       }
-      return null;
-    },
-    [user, generateSessionTitle]
-  );
+    } catch (error) {
+    }
+    return null;
+  }, [user, generateSessionTitle]);
 
   // Placeholder for loadSessionMessages - will be defined after useChat hook
+  
+  const transport = useMemo(() =>
+    new DefaultChatTransport({
+      api: "/api/chat",
+      prepareSendMessagesRequest: async ({ messages }) => {
+        const headers: Record<string, string> = {};
+        if (selectedModel) {
+          headers['x-ollama-model'] = selectedModel;
+        }
 
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: "/api/chat",
-        prepareSendMessagesRequest: async ({ messages }) => {
-          const headers: Record<string, string> = {};
-          if (selectedModel) {
-            headers["x-ollama-model"] = selectedModel;
+        // Check if local provider is enabled in localStorage (only in development mode)
+        if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_APP_MODE === 'development') {
+          const localEnabled = localStorage.getItem('ollama-enabled');
+          if (localEnabled !== null) {
+            headers['x-ollama-enabled'] = localEnabled;
           }
-          console.log(
-            "[Chat Interface] Preparing request, user:",
-            user?.id || "anonymous"
-          );
-          console.log("[prepareSendMessagesRequest] fastMode =", fastMode);
-
-          // Work on a cloned copy to avoid mutating hook state
-          let enrichedMessages = [...messages];
-
-          if (libraryContextRef.current.length > 0) {
-            const pendingContext = libraryContextRef.current;
-            lastSentContextRef.current = pendingContext;
-            libraryContextRef.current = [];
-
-            const lastUserIndex = enrichedMessages
-              .map((msg) => msg.role)
-              .lastIndexOf("user");
-
-            if (lastUserIndex !== -1) {
-              enrichedMessages = enrichedMessages.map((message, index) => {
-                if (index !== lastUserIndex) return message;
-
-                const originalText = (() => {
-                  if (Array.isArray((message as any).parts)) {
-                    const textPart = (message as any).parts.find(
-                      (part: any) =>
-                        part?.type === "text" && typeof part.text === "string"
-                    );
-                    if (textPart) return textPart.text as string;
-                  }
-                  if (typeof (message as any).content === "string") {
-                    return (message as any).content as string;
-                  }
-                  return "";
-                })();
-
-                const enrichedText = buildLibraryContextInstruction(
-                  originalText,
-                  pendingContext
-                );
-
-                if (Array.isArray((message as any).parts)) {
-                  const updatedParts = (message as any).parts.map((part: any) =>
-                    part?.type === "text"
-                      ? { ...part, text: enrichedText }
-                      : part
-                  );
-                  if (
-                    !updatedParts.some((part: any) => part?.type === "text")
-                  ) {
-                    updatedParts.push({ type: "text", text: enrichedText });
-                  }
-                  return {
-                    ...message,
-                    parts: updatedParts,
-                    contextResources: pendingContext,
-                  } as typeof message;
-                }
-
-                if (typeof (message as any).content === "string") {
-                  return {
-                    ...message,
-                    content: enrichedText,
-                    contextResources: pendingContext,
-                  } as typeof message;
-                }
-
-                return message;
-              });
-            }
+          // Add selected provider
+          if (selectedProvider) {
+            headers['x-local-provider'] = selectedProvider;
           }
+        }
 
-          // Convert any pending dropped files into base64 attachments for the API
-          let attachments: any[] = [];
-          try {
-            if (Array.isArray(dropzoneFiles) && dropzoneFiles.length > 0) {
-              attachments = await Promise.all(
-                dropzoneFiles.map(async (f) => {
-                  const buf = await f.arrayBuffer();
-                  const dataBase64 = Buffer.from(buf).toString("base64");
-                  const isImage = (f.type || "").startsWith("image/");
-                  const isPdf =
-                    (f.type || "").toLowerCase() === "application/pdf" ||
-                    (f.name || "").toLowerCase().endsWith(".pdf");
-                  let openaiResult: any = null;
-
-                  if (isImage) {
-                    // Use OpenAI's vision model to analyze the image
-                    openaiResult = await generateText({
-                      model: openai("gpt-4-vision-preview"),
-                      messages: [
-                        {
-                          role: "user",
-                          content: [
-                            {
-                              type: "image",
-                              image: buf,
-                            },
-                            // Optionally, you can add a prompt here
-                            // { type: "text", text: "Describe this image." }
-                          ],
-                        },
-                      ],
-                    });
-                  } else if (isPdf) {
-                    // Use OpenAI's GPT-5 model to analyze the PDF
-                    openaiResult = await generateText({
-                      model: openai("gpt-5"),
-                      messages: [
-                        {
-                          role: "user",
-                          content: [
-                            {
-                              type: "text",
-                              text: "Please analyze the attached PDF file.",
-                            },
-                            {
-                              type: "file",
-                              data: buf,
-                              mediaType: f.type,
-                              filename: f.name,
-                            },
-                          ],
-                        },
-                      ],
-                    });
-                  }
-
-                  return {
-                    kind: isImage ? "image" : isPdf ? "pdf" : "file",
-                    name: f.name,
-                    mediaType:
-                      f.type ||
-                      (isImage
-                        ? "image/png"
-                        : isPdf
-                        ? "application/pdf"
-                        : "application/octet-stream"),
-                    dataBase64,
-                    openaiResult, // This will be null for non-images/non-pdfs, or the OpenAI result for images/pdfs
-                  };
-                })
-              );
-            }
-          } catch (e) {
-            console.warn("Failed to serialize attachments", e);
+        if (user) {
+          const supabase = createClient();
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            headers['Authorization'] = `Bearer ${session.access_token}`;
           }
-          if (user) {
-            const supabase = createClient();
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-            console.log(
-              "[Chat Interface] Session access_token exists:",
-              !!session?.access_token
-            );
-            if (session?.access_token) {
-              headers["Authorization"] = `Bearer ${session.access_token}`;
-            }
-          }
+        }
 
-          // Rate limit increment is handled by the backend API
+        // Rate limit increment is handled by the backend API
 
-          return {
-            body: {
-              messages: enrichedMessages,
-              sessionId: sessionIdRef.current,
-              fastMode: fastModeRef.current,
-              attachments,
-            },
-            headers,
-          };
-        },
-      }),
-    [
-      selectedModel,
-      user,
-      increment,
-      buildLibraryContextInstruction,
-      dropzoneFiles,
-    ]
+        return {
+          body: {
+            messages,
+            sessionId: sessionIdRef.current,
+          },
+          headers,
+        };
+      }
+    }), [selectedModel, selectedProvider, user, increment]
   );
 
   const {
@@ -2620,259 +1899,136 @@ export function ChatInterface({
     regenerate,
     setMessages,
     addToolResult,
-  } = useChat<HealthcareUIMessage>({
+  } = useChat<BiomedUIMessage>({
     transport,
     // Automatically submit when all tool results are available
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     onFinish: () => {
       // Sync with server when chat completes (server has definitely processed increment by now)
       if (user) {
-        console.log(
-          "[Chat Interface] Chat finished, syncing rate limit with server"
-        );
-        queryClient.invalidateQueries({ queryKey: ["rateLimit"] });
+        queryClient.invalidateQueries({ queryKey: ['rateLimit'] });
+      }
+    },
+    onError: (error: Error) => {
+      console.error('[Chat Interface] Error:', error);
+
+      // Check if this is a model compatibility error
+      if (error.message.includes('MODEL_COMPATIBILITY_ERROR')) {
+        try {
+          // Parse the error details from the message
+          const errorData = JSON.parse(error.message.replace(/^Error: /, ''));
+          if (errorData.error === 'MODEL_COMPATIBILITY_ERROR') {
+            setModelCompatibilityError({
+              message: errorData.message,
+              compatibilityIssue: errorData.compatibilityIssue
+            });
+          }
+        } catch (e) {
+          console.error('Failed to parse compatibility error:', e);
+        }
       }
     },
   });
 
-  useEffect(() => {
-    const prevIds = messageIdsRef.current;
-    const currentIds = messages.map((msg) => msg.id);
-
-    // Bail early if message IDs haven't changed
-    const idsChanged =
-      prevIds.length !== currentIds.length ||
-      currentIds.some((id, idx) => id !== prevIds[idx]);
-
-    if (!idsChanged) {
-      return;
-    }
-
-    const newUserMessage = [...messages]
-      .reverse()
-      .find((msg) => !prevIds.includes(msg.id) && msg.role === "user");
-
-    // Skip update unless there's pending context data to apply
-    const hasPendingContext =
-      newUserMessage && lastSentContextRef.current.length > 0;
-
-    if (!hasPendingContext && idsChanged) {
-      // Just update the ref if IDs changed but no context to apply
-      messageIdsRef.current = currentIds;
-      return;
-    }
-
-    setContextResourceMap((prev) => {
-      const next: Record<string, SavedItem[]> = {};
-      currentIds.forEach((id) => {
-        if (prev[id]) {
-          next[id] = prev[id];
-        }
-      });
-
-      if (hasPendingContext) {
-        next[newUserMessage.id] = [...lastSentContextRef.current];
-      }
-
-      const prevKeys = Object.keys(prev);
-      const nextKeys = Object.keys(next);
-      const mapsMatch =
-        prevKeys.length === nextKeys.length &&
-        nextKeys.every((key) => prev[key] === next[key]);
-
-      if (mapsMatch) {
-        return prev;
-      }
-
-      return next;
-    });
-
-    if (hasPendingContext) {
-      lastSentContextRef.current = [];
-    }
-
-    messageIdsRef.current = currentIds;
-  }, [messages]);
-
-  useEffect(() => {
-    if (messages.length === 0) {
-      setContextResourceMap((prev) => {
-        if (Object.keys(prev).length === 0) {
-          return prev;
-        }
-        return {};
-      });
-      messageIdsRef.current = [];
-    }
-  }, [messages.length]);
 
   // Session loading function - defined after useChat to access setMessages
-  const loadSessionMessages = useCallback(
-    async (sessionId: string) => {
-      if (!user) return;
-
-      setIsLoadingSession(true);
-      try {
-        const supabase = createClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        const response = await fetch(`/api/chat/sessions/${sessionId}`, {
-          headers: {
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-        });
-
-        if (response.ok) {
-          let sessionData;
-          try {
-            sessionData = await response.json();
-          } catch (jsonError) {
-            console.error(
-              "[Chat Interface] JSON parsing error when loading session:",
-              jsonError
-            );
-            console.error("[Chat Interface] Response status:", response.status);
-            console.error(
-              "[Chat Interface] Response headers:",
-              Object.fromEntries(response.headers.entries())
-            );
-            const responseText = await response.text();
-            console.error("[Chat Interface] Response text:", responseText);
-            throw new Error("Failed to parse session data");
-          }
-
-          const { messages: sessionMessages } = sessionData;
-          console.log(
-            "[Chat Interface] Loaded session messages:",
-            sessionMessages.length
-          );
-
-          // Convert session messages to the format expected by useChat
-          const convertedMessages = sessionMessages.map((msg: any) => {
-            // Handle different content formats from the database
-            let parts = msg.parts;
-
-            // If parts is a string (legacy format), convert it to proper parts format
-            if (typeof parts === "string") {
-              parts = [{ type: "text", text: parts }];
-            }
-
-            // If parts is not an array, ensure it's properly formatted
-            if (!Array.isArray(parts)) {
-              parts = [{ type: "text", text: "No content found" }];
-            }
-
-            return {
-              id: msg.id,
-              role: msg.role,
-              parts: parts,
-              contextResources: msg.contextResources,
-              toolCalls: msg.toolCalls,
-              createdAt: msg.createdAt,
-            };
-          });
-
-          // Set messages in the chat
-          setMessages(convertedMessages);
-          sessionIdRef.current = sessionId;
-          setCurrentSessionId(sessionId);
-
-          // Extract context resources from loaded messages
-          const newContextResourceMap: Record<string, SavedItem[]> = {};
-          convertedMessages.forEach((msg: any) => {
-            if (msg.role === "user" && msg.contextResources) {
-              newContextResourceMap[msg.id] = msg.contextResources;
-            }
-          });
-
-          // Set the context resource map
-          setContextResourceMap(newContextResourceMap);
-
-          // Move form to bottom when loading a session with messages
-          if (convertedMessages.length > 0) {
-            setIsFormAtBottom(true);
-          }
-
-          // Scroll to bottom after loading messages
-          setTimeout(() => {
-            const c = messagesContainerRef.current;
-            if (c) {
-              console.log(
-                "[Chat Interface] Scrolling to bottom after session load"
-              );
-              c.scrollTo({ top: c.scrollHeight, behavior: "smooth" });
-            }
-            // Also try the messagesEndRef as backup
-            setTimeout(() => {
-              messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-            }, 100);
-          }, 500);
+  const loadSessionMessages = useCallback(async (sessionId: string) => {
+    if (!user) return;
+    
+    setIsLoadingSession(true);
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(`/api/chat/sessions/${sessionId}`, {
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`
         }
-      } catch (error) {
-        console.error("[Chat Interface] Failed to load session:", error);
-      } finally {
-        setIsLoadingSession(false);
+      });
+
+      if (response.ok) {
+        const { messages: sessionMessages } = await response.json();
+        
+        // Convert session messages to the format expected by useChat
+        const convertedMessages = sessionMessages.map((msg: any) => ({
+          id: msg.id,
+          role: msg.role,
+          parts: msg.parts,
+          toolCalls: msg.toolCalls,
+          createdAt: msg.createdAt,
+          processing_time_ms: msg.processing_time_ms
+        }));
+        
+        // Set messages in the chat
+        setMessages(convertedMessages);
+        sessionIdRef.current = sessionId;
+        setCurrentSessionId(sessionId);
+        
+        // Move form to bottom when loading a session with messages
+        if (convertedMessages.length > 0) {
+          setIsFormAtBottom(true);
+        }
+        
+        // Scroll to bottom after loading messages
+        setTimeout(() => {
+          const c = messagesContainerRef.current;
+          if (c) {
+            c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' });
+          }
+          // Also try the messagesEndRef as backup
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+        }, 500);
       }
-    },
-    [user, setMessages]
-  );
-
-  // Keep ref in sync with prop changes
-  useEffect(() => {
-    sessionIdRef.current = sessionId;
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (!sessionId) {
-      setLibraryContextItems([]);
+    } catch (error) {
+    } finally {
+      setIsLoadingSession(false);
     }
-  }, [sessionId]);
+  }, [user, setMessages]);
 
-  // Load session once both the sessionId and user are ready
-  useEffect(() => {
-    if (!sessionId || !user) {
-      if (sessionId && !user) {
-        console.log(
-          "[Chat Interface] Waiting for authenticated user before loading session"
-        );
-      }
-      return;
-    }
-
-    if (sessionId !== currentSessionId) {
-      console.log("[Chat Interface] Loading session:", sessionId);
-      loadSessionMessages(sessionId);
-    }
-  }, [sessionId, user, currentSessionId, loadSessionMessages]);
-
-  // Reset chat state when no session is selected
-  useEffect(() => {
-    if (sessionId !== undefined) return;
-    if (!currentSessionId) return;
-
-    console.log("[Chat Interface] Clearing for new chat");
-
-    if (status === "streaming" || status === "submitted") {
-      console.log("[Chat Interface] Stopping ongoing chat for new chat");
+  // Handle stop with error catching to prevent AbortError
+  const handleStop = useCallback(() => {
+    try {
+      // Just call stop, the SDK should handle if there's nothing to stop
       stop();
+    } catch (error) {
+      // Silently ignore AbortError - this is expected behavior
+      // The error occurs when stop() is called but there's no active stream
     }
+  }, [stop]);
 
-    setCurrentSessionId(undefined);
-    setMessages([]);
-    setInput("");
-    setIsFormAtBottom(false);
-    setEditingMessageId(null);
-    setEditingText("");
-    onNewChat?.();
-  }, [sessionId, currentSessionId, status, stop, onNewChat]);
-
+  // Initialize and handle sessionId prop changes
   useEffect(() => {
-    console.log("Messages updated:", messages);
-  }, [messages]);
+    if (sessionId !== currentSessionId) {
+      if (sessionId) {
+        // Update ref and load messages when sessionId prop has a value
+        sessionIdRef.current = sessionId;
+        loadSessionMessages(sessionId);
+      } else if (!sessionIdRef.current) {
+        // Only clear if we don't have a locally-created session
+        // (if sessionIdRef has a value, it means handleSubmit just created a session
+        // but the prop hasn't updated yet - don't clear in this case!)
 
-  // Check rate limit status
+        // Don't call stop() here - it causes AbortErrors
+        // The SDK will handle cleanup when we clear messages
+
+        // Clear everything for fresh start
+        setCurrentSessionId(undefined);
+        setMessages([]);
+        setInput(''); // Clear input field
+        setIsFormAtBottom(false); // Reset form position for new chat
+        setEditingMessageId(null); // Clear any editing state
+        setEditingText('');
+
+        // Call parent's new chat handler if provided
+        onNewChat?.();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]); // Only sessionId prop dependency - internal state changes should not retrigger this
+
+  // Check rate limit status 
   useEffect(() => {
     setIsRateLimited(!canSendQuery);
   }, [canSendQuery]);
@@ -2880,48 +2036,36 @@ export function ChatInterface({
   // Detect mobile device
   useEffect(() => {
     const checkMobile = () => {
-      const isMobileDevice =
-        window.innerWidth <= 768 || // 768px is the sm breakpoint in Tailwind
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-          navigator.userAgent
-        );
+      const isMobileDevice = window.innerWidth <= 768 || // 768px is the sm breakpoint in Tailwind
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       setIsMobile(isMobileDevice);
       // On mobile, always keep form at bottom
       if (isMobileDevice) {
         setIsFormAtBottom(true);
       }
     };
-
+    
     checkMobile();
-    window.addEventListener("resize", checkMobile);
-
-    return () => window.removeEventListener("resize", checkMobile);
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
   }, []); // Empty dependency array - only run on mount
 
   // Handle rate limit errors
   useEffect(() => {
     if (error) {
-      console.log("[Chat Interface] Error occurred:", error);
-
+      
       // Check if it's a rate limit error
-      if (
-        error.message &&
-        (error.message.includes("RATE_LIMIT_EXCEEDED") ||
-          error.message.includes("429"))
-      ) {
+      if (error.message && (error.message.includes('RATE_LIMIT_EXCEEDED') || error.message.includes('429'))) {
         setIsRateLimited(true);
         try {
           // Try to extract reset time from error response
           const errorData = JSON.parse(error.message);
-          const resetTime =
-            errorData.resetTime ||
-            new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+          const resetTime = errorData.resetTime || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
           onRateLimitError?.(resetTime);
         } catch (e) {
           // Fallback: use default reset time (next day)
-          const resetTime = new Date(
-            Date.now() + 24 * 60 * 60 * 1000
-          ).toISOString();
+          const resetTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
           onRateLimitError?.(resetTime);
         }
       }
@@ -2930,9 +2074,41 @@ export function ChatInterface({
 
   // Notify parent component about message state changes
   useEffect(() => {
-    console.log("[Chat Interface] Messages changed, count:", messages.length);
     onMessagesChange?.(messages.length > 0);
   }, [messages.length]); // Remove onMessagesChange from dependencies to prevent infinite loops
+
+  // Track page visibility to reduce re-renders in background
+  const [isPageVisible, setIsPageVisible] = useState(true);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const visible = !document.hidden;
+      setIsPageVisible(visible);
+
+      if (document.hidden) {
+        // Page is hidden (tab switched away) - stream continues in background
+        console.log('[Chat Interface] Page hidden - reducing re-render frequency to prevent crash');
+      } else {
+        // Page is visible again (tab switched back)
+        console.log('[Chat Interface] Page visible again - resuming normal updates');
+
+        // Check if streaming was active
+        if (status === 'submitted' || status === 'streaming') {
+          console.log('[Chat Interface] Stream still active - UI will update with any buffered data');
+        }
+      }
+    };
+
+    // Set initial visibility
+    setIsPageVisible(!document.hidden);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [status]); // Re-attach listener when status changes
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -2943,7 +2119,10 @@ export function ChatInterface({
   // Tracks whether we should stick to bottom (true when user is at bottom)
   const shouldStickToBottomRef = useRef<boolean>(true);
   // Defer messages to keep input responsive during streaming
+  // When page is hidden, aggressively defer to prevent memory buildup
   const deferredMessages = useDeferredValue(messages);
+  // Use original messages when visible, deferred when hidden to reduce re-renders
+  const displayMessages = isPageVisible ? messages : deferredMessages;
   // Lightweight virtualization for long threads
   const virtualizationEnabled = deferredMessages.length > 60;
   const [avgRowHeight, setAvgRowHeight] = useState<number>(140);
@@ -2952,6 +2131,12 @@ export function ChatInterface({
     end: number;
   }>({ start: 0, end: 30 });
   const overscan = 8;
+  // Use ref to track visible range and avoid infinite loop (critical fix for tab switching)
+  const visibleRangeRef = useRef(visibleRange);
+  useEffect(() => {
+    visibleRangeRef.current = visibleRange;
+  }, [visibleRange]);
+
   const updateVisibleRange = useCallback(() => {
     if (!virtualizationEnabled) return;
     const c = messagesContainerRef.current;
@@ -2962,32 +2147,30 @@ export function ChatInterface({
     const start = Math.max(0, Math.floor(c.scrollTop / rowH) - overscan);
     const count = Math.ceil(containerH / rowH) + overscan * 2;
     const end = Math.min(deferredMessages.length, start + count);
-    setVisibleRange((prev) => {
-      if (prev.start === start && prev.end === end) {
-        return prev;
-      }
-      return { start, end };
-    });
-  }, [virtualizationEnabled, avgRowHeight, overscan, deferredMessages.length]);
+    // Use ref to compare instead of state - prevents infinite loop
+    if (start !== visibleRangeRef.current.start || end !== visibleRangeRef.current.end) {
+      setVisibleRange({ start, end });
+    }
+  }, [
+    virtualizationEnabled,
+    avgRowHeight,
+    overscan,
+    deferredMessages.length,
+    // Removed visibleRange.start and visibleRange.end - this was causing infinite loop
+  ]);
   useEffect(() => {
-    if (!virtualizationEnabled) return;
-    setVisibleRange((prev) => {
-      const next = {
-        start: 0,
-        end: Math.min(deferredMessages.length, 30),
-      };
-      if (prev.start === next.start && prev.end === next.end) {
-        return prev;
-      }
-      return next;
-    });
-    requestAnimationFrame(updateVisibleRange);
-  }, [virtualizationEnabled, deferredMessages.length, updateVisibleRange]);
+    if (virtualizationEnabled) {
+      setVisibleRange({ start: 0, end: Math.min(deferredMessages.length, 30) });
+      requestAnimationFrame(updateVisibleRange);
+    }
+    // Removed updateVisibleRange from dependencies - prevents infinite loop
+  }, [virtualizationEnabled, deferredMessages.length]);
   useEffect(() => {
     const onResize = () => updateVisibleRange();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [updateVisibleRange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - updateVisibleRange is stable now
 
   // Helper: detect if messages container scrolls or if page scroll is used
   const isContainerScrollable = () => {
@@ -2996,10 +2179,15 @@ export function ChatInterface({
     return container.scrollHeight > container.clientHeight + 2;
   };
 
-  // Load query from URL params on initial load (but not when starting new chat)
+  // Load query from URL params on initial load (but not when starting new chat or submitting)
   useEffect(() => {
     if (isStartingNewChat) {
       setIsStartingNewChat(false);
+      return;
+    }
+
+    // Skip URL sync when actively submitting to prevent race condition
+    if (isSubmitting) {
       return;
     }
 
@@ -3009,7 +2197,6 @@ export function ChatInterface({
       try {
         decodedQuery = decodeURIComponent(queryParam);
       } catch (e) {
-        console.warn("Failed to decode query param:", e);
         // fallback: use raw queryParam
       }
       setInput(decodedQuery);
@@ -3017,7 +2204,14 @@ export function ChatInterface({
       // Clear input if no query param and no messages (fresh start)
       setInput("");
     }
-  }, [searchParams, messages.length, isStartingNewChat]);
+  }, [searchParams, messages.length, isStartingNewChat, isSubmitting]);
+
+  // Clear submitting flag when message is added
+  useEffect(() => {
+    if (isSubmitting && messages.length > 0) {
+      setIsSubmitting(false);
+    }
+  }, [messages.length, isSubmitting]);
 
   // Reset form position when all messages are cleared (except on mobile)
   useEffect(() => {
@@ -3026,72 +2220,62 @@ export function ChatInterface({
     }
   }, [messages.length, isMobile]);
 
+  // Live processing time tracker
+  useEffect(() => {
+    const isLoading = status === "submitted" || status === "streaming";
+
+    if (isLoading && !queryStartTime) {
+      // Start tracking when query begins
+      setQueryStartTime(Date.now());
+    } else if (!isLoading && queryStartTime) {
+      // Capture final time before stopping
+      const finalTime = Date.now() - queryStartTime;
+      setLiveProcessingTime(finalTime);
+      setQueryStartTime(null);
+
+    }
+
+    if (isLoading && queryStartTime) {
+      // Update live timer every 100ms
+      const interval = setInterval(() => {
+        setLiveProcessingTime(Date.now() - queryStartTime);
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [status, queryStartTime]);
+
   // Check if user is at bottom of scroll (container only)
-  const isAtBottom = () => {
+  // Wrap in useCallback to prevent re-renders (doc line 1386)
+  const isAtBottom = useCallback(() => {
     const container = messagesContainerRef.current;
     if (!container) return false;
     const threshold = 5;
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
     const atBottom = distanceFromBottom <= threshold;
-    console.log("[SCROLL DEBUG] isAtBottom (container):", {
-      scrollHeight: container.scrollHeight,
-      scrollTop: container.scrollTop,
-      clientHeight: container.clientHeight,
-      distanceFromBottom,
-      threshold,
-      atBottom,
-    });
     return atBottom;
-  };
+  }, []);
 
   // Auto-scroll ONLY if already at bottom when new content arrives
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
-    console.log("[SCROLL DEBUG] Message update triggered:", {
-      userHasInteracted: userHasInteracted.current,
-      messageCount: messages.length,
-      status,
-      willAutoScroll: isAtBottomState,
-      anchorInView,
-      containerMetrics: (function () {
-        const c = messagesContainerRef.current;
-        if (!c) return null;
-        return {
-          scrollTop: c.scrollTop,
-          scrollHeight: c.scrollHeight,
-          clientHeight: c.clientHeight,
-        };
-      })(),
-    });
-
     // ONLY auto-scroll if sticky is enabled AND streaming/submitted
     const isLoading = status === "submitted" || status === "streaming";
     if (isLoading && shouldStickToBottomRef.current) {
-      console.log(
-        "[SCROLL DEBUG] AUTO-SCROLLING because stick-to-bottom is enabled"
-      );
       // Small delay to let content render
       requestAnimationFrame(() => {
         const c = messagesContainerRef.current;
         if (c && c.scrollHeight > c.clientHeight + 1) {
-          console.log("[SCROLL DEBUG] Scrolling container to bottom");
           c.scrollTo({ top: c.scrollHeight, behavior: "smooth" });
         } else {
           const doc = document.scrollingElement || document.documentElement;
           const targetTop = doc.scrollHeight;
-          console.log("[SCROLL DEBUG] Scrolling window to bottom", {
-            targetTop,
-          });
           window.scrollTo({ top: targetTop, behavior: "smooth" });
         }
       });
     } else {
-      console.log(
-        "[SCROLL DEBUG] NOT auto-scrolling - stick-to-bottom disabled"
-      );
     }
   }, [messages, status, isAtBottomState, anchorInView]);
 
@@ -3099,22 +2283,12 @@ export function ChatInterface({
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) {
-      console.log("[SCROLL DEBUG] Container not found in scroll handler!");
       return;
     }
-
-    console.log(
-      "[SCROLL DEBUG] Setting up scroll handlers on container:",
-      container
-    );
 
     const handleScroll = () => {
       const atBottom = isAtBottom();
       setIsAtBottomState(atBottom);
-      console.log(
-        "[SCROLL DEBUG] Scroll event fired (container), atBottom:",
-        atBottom
-      );
       // Disable sticky when not at bottom; re-enable when at bottom
       shouldStickToBottomRef.current = atBottom;
       userHasInteracted.current = !atBottom;
@@ -3125,13 +2299,8 @@ export function ChatInterface({
 
     // Handle wheel events to immediately detect scroll intent
     const handleWheel = (e: WheelEvent) => {
-      console.log("[SCROLL DEBUG] Wheel event detected, deltaY:", e.deltaY);
-
       // If scrolling up, immediately disable auto-scroll
       if (e.deltaY < 0) {
-        console.log(
-          "[SCROLL DEBUG] User scrolling UP via wheel - disabling auto-scroll"
-        );
         userHasInteracted.current = true;
         shouldStickToBottomRef.current = false;
       } else if (e.deltaY > 0) {
@@ -3141,9 +2310,6 @@ export function ChatInterface({
           if (atBottom) {
             userHasInteracted.current = false; // Reset if back at bottom
             shouldStickToBottomRef.current = true;
-            console.log(
-              "[SCROLL DEBUG] User scrolled to bottom via wheel - enabling stick-to-bottom"
-            );
           }
         }, 50);
       }
@@ -3161,9 +2327,6 @@ export function ChatInterface({
 
       if (deltaY > 10) {
         // Scrolling up
-        console.log(
-          "[SCROLL DEBUG] Touch scroll UP detected - disabling auto-scroll"
-        );
         userHasInteracted.current = true;
         shouldStickToBottomRef.current = false;
       }
@@ -3182,14 +2345,7 @@ export function ChatInterface({
     const handleGlobalWheel = (e: WheelEvent) => {
       const inContainer = container.contains(e.target as Node);
       if (inContainer) {
-        console.log(
-          "[SCROLL DEBUG] Global wheel event in container, deltaY:",
-          e.deltaY
-        );
         if (e.deltaY < 0) {
-          console.log(
-            "[SCROLL DEBUG] Global scroll UP - disabling auto-scroll"
-          );
           userHasInteracted.current = true;
           shouldStickToBottomRef.current = false;
         }
@@ -3212,7 +2368,8 @@ export function ChatInterface({
       document.removeEventListener("wheel", handleGlobalWheel);
       // No window scroll listener to remove
     };
-  }, [updateVisibleRange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - prevent infinite loop on tab switch
 
   // Observe bottom anchor visibility relative to the scroll container
   useEffect(() => {
@@ -3231,7 +2388,6 @@ export function ChatInterface({
   // Scroll to bottom when user submits a message
   useEffect(() => {
     if (status === "submitted") {
-      console.log("[SCROLL DEBUG] User submitted message, scrolling to bottom");
       userHasInteracted.current = false; // Reset interaction flag for new message
       shouldStickToBottomRef.current = true; // Re-enable stickiness on new message
       // Always scroll to bottom when user sends a message
@@ -3244,43 +2400,39 @@ export function ChatInterface({
     }
   }, [status]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, skipSignupPrompt = false) => {
     e.preventDefault();
     if (input.trim() && status === "ready") {
       // Check current rate limit status immediately before sending
-      console.log("[Chat Interface] Rate limit check before submit:", {
-        canSendQuery,
-      });
 
       if (!canSendQuery) {
         // Rate limit exceeded - show dialog and don't send message or update URL
-        console.log("[Chat Interface] Rate limit exceeded, showing dialog");
         setIsRateLimited(true);
-        onRateLimitError?.(
-          resetTime?.toISOString() || new Date().toISOString()
-        );
+        onRateLimitError?.(resetTime?.toISOString() || new Date().toISOString());
         return;
       }
 
-      console.log("[Chat Interface] Rate limit OK, proceeding with message");
-
       // Store the input to send
       const queryText = input.trim();
-      if (libraryContextItems.length > 0) {
-        libraryContextRef.current = [...libraryContextItems];
-      } else {
-        libraryContextRef.current = [];
+
+      // Show signup prompt for non-authenticated users on first message
+      if (!user && messages.length === 0 && !skipSignupPrompt) {
+        setShowSignupPrompt(true);
+        return; // Don't send message yet
       }
+
+      // Set submitting flag to prevent URL sync race condition
+      setIsSubmitting(true);
 
       // Clear input immediately before sending to prevent any display lag
       setInput("");
 
       // Track user query submission
-      track("User Query Submitted", {
+      track('User Query Submitted', {
         query: queryText,
         queryLength: queryText.length,
         messageCount: messages.length,
-        remainingQueries: remaining ? remaining - 1 : 0,
+        remainingQueries: remaining ? remaining - 1 : 0
       });
 
       updateUrlWithQuery(queryText);
@@ -3291,54 +2443,32 @@ export function ChatInterface({
 
       // Create session BEFORE sending message for proper usage tracking
       if (user && !currentSessionId && messages.length === 0) {
-        console.log(
-          "[Chat Interface] Creating session synchronously for first message"
-        );
         try {
           const newSessionId = await createSession(queryText);
           if (newSessionId) {
             sessionIdRef.current = newSessionId;
             setCurrentSessionId(newSessionId);
             onSessionCreated?.(newSessionId);
-            console.log(
-              "[Chat Interface] Session created before message:",
-              newSessionId
-            );
           }
         } catch (error) {
-          console.error("[Chat Interface] Failed to create session:", error);
           // Continue with message sending even if session creation fails
         }
       }
 
       // Increment rate limit for anonymous users (authenticated users handled server-side)
       if (!user && increment) {
-        console.log(
-          "[Chat Interface] Incrementing rate limit for anonymous user"
-        );
         try {
           const result = await increment();
-          console.log("[Chat Interface] Anonymous increment result:", result);
         } catch (error) {
-          console.error(
-            "[Chat Interface] Failed to increment anonymous rate limit:",
-            error
-          );
           // Continue with message sending even if increment fails
         }
       }
 
       // Send message with sessionId available for usage tracking
       sendMessage({ text: queryText });
-
-      if (libraryContextItems.length > 0) {
-        setLibraryContextItems([]);
-        setLibraryContextExpanded(false);
-      }
-
+      
       // For authenticated users, trigger optimistic rate limit update
       if (user) {
-        console.log("[Chat Interface] Triggering optimistic rate limit update");
         rateLimitMutation.mutate();
       }
     }
@@ -3393,7 +2523,8 @@ export function ChatInterface({
     setEditingText("");
   };
 
-  const toggleToolExpansion = (toolId: string) => {
+  // Wrap in useCallback to prevent re-renders (doc line 625)
+  const toggleToolExpansion = useCallback((toolId: string) => {
     setExpandedTools((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(toolId)) {
@@ -3403,9 +2534,9 @@ export function ChatInterface({
       }
       return newSet;
     });
-  };
+  }, []);
 
-  const toggleChartExpansion = (toolId: string) => {
+  const toggleChartExpansion = useCallback((toolId: string) => {
     setExpandedTools((prev) => {
       const newSet = new Set(prev);
       const collapsedKey = `collapsed-${toolId}`;
@@ -3416,24 +2547,90 @@ export function ChatInterface({
       }
       return newSet;
     });
-  };
+  }, []);
 
-  const copyToClipboard = async (text: string) => {
+  // Wrap in useCallback to prevent re-renders (doc line 619)
+  const copyToClipboard = useCallback(async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       // You could add a toast notification here if desired
     } catch (err) {
-      console.error("Failed to copy text: ", err);
     }
-  };
+  }, []);
+
+  // Track PDF download state
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
+
+  // Download professional PDF report with charts and citations
+  const handleDownloadPDF = useCallback(async () => {
+    if (!sessionIdRef.current) {
+      return;
+    }
+
+    // Track PDF download
+    track('PDF Download Started', {
+      sessionId: sessionIdRef.current,
+      messageCount: messages.length
+    });
+
+    setIsDownloadingPDF(true);
+
+    try {
+
+      // Call server-side PDF generation API
+      const response = await fetch('/api/reports/generate-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: sessionIdRef.current,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate PDF');
+      }
+
+      // Get PDF blob
+      const blob = await response.blob();
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      // Get filename from response header or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
+      const filename = filenameMatch ? filenameMatch[1] : `report-${Date.now()}.pdf`;
+
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+
+      track('PDF Downloaded', {
+        sessionId: sessionIdRef.current,
+        messageCount: messages.length,
+      });
+    } catch (err) {
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsDownloadingPDF(false);
+    }
+  }, [messages]);
 
   const updateUrlWithQuery = (query: string) => {
     if (query.trim()) {
       const url = new URL(window.location.href);
-      url.searchParams.set("q", query);
+      url.searchParams.set('q', query);
       // Preserve chatId if it exists
       if (sessionIdRef.current) {
-        url.searchParams.set("chatId", sessionIdRef.current);
+        url.searchParams.set('chatId', sessionIdRef.current);
       }
       window.history.replaceState({}, "", url.toString());
     }
@@ -3462,7 +2659,7 @@ export function ChatInterface({
     }, 4); // Adjust speed here (lower = faster)
   };
 
-  const getMessageText = (message: HealthcareUIMessage) => {
+  const getMessageText = (message: BiomedUIMessage) => {
     return message.parts
       .filter((part) => part.type === "text")
       .map((part) => part.text)
@@ -3476,1804 +2673,1650 @@ export function ChatInterface({
   const canRegenerate =
     (status === "ready" || status === "error") && messages.length > 0;
 
+  // Calculate cumulative metrics from all assistant messages
+  const cumulativeMetrics = useMemo(() => {
+    let totalMetrics: MessageMetrics = {
+      sourcesAnalyzed: 0,
+      wordsProcessed: 0,
+      timeSavedMinutes: 0,
+      moneySaved: 0,
+      processingTimeMs: 0,
+      breakdown: {
+        sourceReadingMinutes: 0,
+        sourceFindingMinutes: 0,
+        writingMinutes: 0,
+        csvCreationMinutes: 0,
+        chartCreationMinutes: 0,
+        analysisMinutes: 0,
+        dataProcessingMinutes: 0,
+      },
+    };
+
+    messages.filter(m => m.role === 'assistant').forEach(message => {
+      // Extract message parts from different possible formats
+      let messageParts: any[] = [];
+
+      if (Array.isArray((message as any).content)) {
+        messageParts = (message as any).content;
+      } else if ((message as any).parts) {
+        messageParts = (message as any).parts;
+      }
+
+      const messageMetrics = calculateMessageMetrics(messageParts);
+
+      // Accumulate metrics
+      totalMetrics.sourcesAnalyzed += messageMetrics.sourcesAnalyzed;
+      totalMetrics.wordsProcessed += messageMetrics.wordsProcessed;
+      totalMetrics.timeSavedMinutes += messageMetrics.timeSavedMinutes;
+      totalMetrics.moneySaved += messageMetrics.moneySaved;
+
+      // Accumulate processing time from message metadata
+      if ((message as any).processing_time_ms || (message as any).processingTimeMs) {
+        const msgProcessingTime = (message as any).processing_time_ms || (message as any).processingTimeMs || 0;
+        totalMetrics.processingTimeMs += msgProcessingTime;
+      }
+
+      // Accumulate breakdown
+      Object.keys(messageMetrics.breakdown).forEach((key) => {
+        const breakdownKey = key as keyof typeof messageMetrics.breakdown;
+        totalMetrics.breakdown[breakdownKey] += messageMetrics.breakdown[breakdownKey];
+      });
+    });
+
+    // Add live processing time if currently loading
+    if (liveProcessingTime > 0) {
+      totalMetrics.processingTimeMs += liveProcessingTime;
+    }
+
+    return totalMetrics;
+  }, [messages, liveProcessingTime]);
+
   return (
-    <>
-      <SavedResultsProvider>
-        <SeenResultsProvider sessionKey={sessionIdRef.current}>
-          <div className="w-full max-w-3xl mx-auto relative min-h-0">
-            {/* Removed duplicate New Chat button - handled by parent page */}
-            {process.env.NEXT_PUBLIC_APP_MODE === "development" && (
-              <div className="fixed top-4 left-4 z-50">
-                <OllamaStatusIndicator hasMessages={messages.length > 0} />
-              </div>
-            )}
+    <div className="w-full max-w-3xl mx-auto relative min-h-0">
+      {/* Removed duplicate New Chat button - handled by parent page */}
 
-            {/* Messages */}
-            <div
-              ref={messagesContainerRef}
-              className={`space-y-4 sm:space-y-8 overflow-y-auto overflow-x-hidden ${
-                messages.length > 0 ? "pt-20 sm:pt-24" : "pt-2 sm:pt-4"
-              } ${isFormAtBottom ? "pb-32 sm:pb-36" : "pb-4 sm:pb-8"}`}
-            >
-              {messages.length === 0 && (
+      {/* Messages */}
+      <div
+        ref={messagesContainerRef}
+        className={`space-y-4 sm:space-y-8 min-h-[300px] overflow-y-auto overflow-x-hidden ${
+          messages.length > 0 ? "pt-20 sm:pt-24" : "pt-2 sm:pt-4"
+        } ${isFormAtBottom ? "pb-44 sm:pb-36" : "pb-4 sm:pb-8"}`}
+      >
+        {messages.length === 0 && (
+          <motion.div
+            className="pt-8 1"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="text-center mb-6 sm:mb-8">
+              {/* Capabilities */}
+              <div className="max-w-4xl mx-auto">
                 <motion.div
-                  className="pt-8 1"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.5 }}
+                  className="text-center mb-4 sm:mb-6"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1, duration: 0.5 }}
                 >
-                  <div className="text-center mb-4 sm:mb-6">
-                    {/* Capabilities */}
-                    <div className="max-w-4xl mx-auto">
-                      {/* Fast Mode Toggle */}
-                      <motion.button
-                        onClick={() => setEffectiveFastMode(!effectiveFastMode)}
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-medium mb-2 transition-colors
-                    ${
-                      effectiveFastMode
-                        ? "bg-purple-100 dark:bg-purple-900/40 border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300"
-                        : "bg-green-50 dark:bg-green-800/50 border-green-200 dark:border-green-700 text-green-500 dark:text-green-400"
+                  <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Try these capabilities
+                  </h3>
+                </motion.div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 px-2 sm:px-0">
+                  <motion.button
+                    onClick={() =>
+                      handlePromptClick(
+                        "Find patents similar to a machine learning system that uses transformer neural networks for drug discovery. Search for prior art covering attention mechanisms, molecular representation learning, and protein-ligand binding prediction. Create a CSV with patent numbers, assignees, filing dates, and relevance scores."
+                      )
                     }
-                    hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/60
-                  `}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.08, duration: 0.4 }}
-                        whileTap={{ scale: 0.97 }}
-                        style={{ position: "absolute", left: 0, marginLeft: 0 }}
-                        aria-pressed={effectiveFastMode}
-                        type="button"
-                      >
-                        <span
-                          className={`w-2 h-2 rounded-full mr-1 ${
-                            effectiveFastMode
-                              ? "bg-purple-500"
-                              : "bg-green-400 dark:bg-green-600"
-                          }`}
-                        />
-
-                        <span>
-                          {effectiveFastMode ? "Fast Mode" : "Research Mode"}
-                        </span>
-                      </motion.button>
-                      <motion.div
-                        className="text-center mb-4 sm:mb-6"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1, duration: 0.5 }}
-                      >
-                        <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                          Try these capabilities
-                        </h3>
-                      </motion.div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 px-2 sm:px-0">
-                        <BackgroundOverlay
-                          defaultBackground=""
-                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaDc2enljZG9pOXA4M2liOGVpcGdoa2RyN3QzaHl5Njh3aXYyeWVvYSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/3o85xC8sdW7vmG6bRe/giphy.gif"
-                          className="h-32 sm:h-36 bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-                          onClick={() =>
-                            handlePromptClick(
-                              "Explain Huawei’s chiplet packaging patent in plain English"
-                            )
-                          }
-                        >
-                          <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.4, duration: 0.5 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="h-full flex flex-col justify-center items-center text-center group"
-                          >
-                            <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
-                              🔩 Semiconductor & Chiplet
-                            </div>
-                            <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 group-hover:opacity-0 transition-opacity duration-300">
-                              Patent analysis, chiplet packaging, and
-                              semiconductors
-                            </div>
-                          </motion.div>
-                        </BackgroundOverlay>
-
-                        <BackgroundOverlay
-                          defaultBackground=""
-                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3azByemxrNDJ4MW9wOTE3Z202OHVlZHMwdnAzemZqdnZ1Zm5tZjhubSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/MuE9MGdYDmem1FwE0o/giphy.gif"
-                          className="h-32 sm:h-36 bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-                          onClick={() =>
-                            handlePromptClick(
-                              "Break down Nintendo’s summoning patent — what mechanics does it cover?"
-                            )
-                          }
-                        >
-                          <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.5, duration: 0.5 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="h-full flex flex-col justify-center items-center text-center group"
-                          >
-                            <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
-                              🎮 Games & Entertainment
-                            </div>
-                            <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 group-hover:opacity-0 transition-opacity duration-300">
-                              Patent analysis, game mechanics, and entertainment
-                            </div>
-                          </motion.div>
-                        </BackgroundOverlay>
-
-                        <BackgroundOverlay
-                          defaultBackground=""
-                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOG4yaTVuMG95eDRidGFpN2JjaDk0aXZpZ29lcjgyaDN0aDY2bXB2MiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/gjAd5llUlKZjom2iuL/giphy.gif"
-                          className="h-32 sm:h-36 bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-                          onClick={() =>
-                            handlePromptClick(
-                              "Find the newest AI-driven drug discovery patents and explain their novelty."
-                            )
-                          }
-                        >
-                          <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.6, duration: 0.5 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="h-full flex flex-col justify-center items-center text-center group"
-                          >
-                            <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
-                              💼 AI in Drug Discovery
-                            </div>
-                            <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 group-hover:opacity-0 transition-opacity duration-300">
-                              Drug discovery, patent analysis, and AI
-                            </div>
-                          </motion.div>
-                        </BackgroundOverlay>
-
-                        <BackgroundOverlay
-                          defaultBackground=""
-                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeDMweHN0aWNza3djeTNwbTBpMTd4NnUyMXVkdjMzdHN1bHRkb29xMCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/Q8DQRJ7X3ps5y4TRnh/giphy.gif"
-                          className="h-32 sm:h-36 bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-                          onClick={() =>
-                            handlePromptClick(
-                              "Find areas where US federal R&D spending overlaps with a surge in new patents in the past 5 years. Rank by total award amount."
-                            )
-                          }
-                        >
-                          <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.7, duration: 0.5 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="h-full flex flex-col justify-center items-center text-center group"
-                          >
-                            <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
-                              🏛️ Federal Spending & Patents
-                            </div>
-                            <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 group-hover:opacity-0 transition-opacity duration-300">
-                              Federal spending, patents, and R&D
-                            </div>
-                          </motion.div>
-                        </BackgroundOverlay>
-
-                        <BackgroundOverlay
-                          defaultBackground=""
-                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdHc1eGMwNGthcXZ1OGF3b3Qzd3VzdHhpdGJxaTl1cHhhOHk0cDBsMyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/xUA7b4arnbo3THfzi0/giphy.gif"
-                          className="h-32 sm:h-36 col-span-1 sm:col-span-2 lg:col-span-1 bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-                          onClick={() =>
-                            handlePromptClick(
-                              "Analyze whether US climate-tech funding (DOE grants/contracts) corresponds with patent filings in renewable energy."
-                            )
-                          }
-                        >
-                          <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.8, duration: 0.5 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="h-full flex flex-col justify-center items-center text-center group"
-                          >
-                            <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
-                              🌱 Policy and impacts
-                            </div>
-                            <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 group-hover:opacity-0 transition-opacity duration-300">
-                              US climate-tech funding and patents in renewable
-                              energy
-                            </div>
-                          </motion.div>
-                        </BackgroundOverlay>
-
-                        <BackgroundOverlay
-                          defaultBackground=""
-                          hoverBackground="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaWs1OW95bmM4OXlrbGZid3Ftd3lxaDc2Z3djbG10ZG9taHFpMXB2cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/XUFPGrX5Zis6Y/giphy.gif"
-                          className="h-32 sm:h-36 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 p-2.5 sm:p-4 rounded-xl border border-purple-200 dark:border-purple-700 hover:border-purple-300 dark:hover:border-purple-600 transition-colors hover:from-purple-100 hover:to-indigo-100 dark:hover:from-purple-900/30 dark:hover:to-indigo-900/30"
-                          onClick={() =>
-                            handlePromptClick(
-                              "Find overlap between hypersonic missile patents and federal awards in hypersonics or advanced propulsion."
-                            )
-                          }
-                        >
-                          <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3, duration: 0.5 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="h-full flex flex-col justify-center items-center text-center group"
-                          >
-                            <div className="text-purple-700 dark:text-purple-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:opacity-0 transition-opacity duration-300">
-                              💻 Defence Technology
-                            </div>
-                            <div className="text-[10px] sm:text-xs text-purple-600 dark:text-purple-400 group-hover:opacity-0 transition-opacity duration-300">
-                              Defence technology, weapons, and military
-                            </div>
-                          </motion.div>
-                        </BackgroundOverlay>
-                      </div>
+                    className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3, duration: 0.5 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
+                      🔍 Prior Art Search
                     </div>
-                  </div>
-                </motion.div>
-              )}
+                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                      ML patents for drug discovery
+                    </div>
+                  </motion.button>
 
-              {/* Input Form when not at bottom (desktop only) */}
-              {!isFormAtBottom && messages.length === 0 && !isMobile && (
-                <motion.div
-                  className="mt-8 mb-16"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.9, duration: 0.5 }}
-                >
-                  <div className="w-full max-w-3xl mx-auto px-4 sm:px-6">
-                    <form
-                      onSubmit={handleSubmit}
-                      className="max-w-3xl mx-auto space-y-2"
-                    >
-                      {showFileDropzone && (
-                        <div className="rounded-2xl border border-dashed border-gray-300 bg-white/80 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/40">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-medium text-sm text-gray-800 dark:text-gray-200">
-                                Attach files &amp; media
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                Drop files below or click to browse. We&apos;ll
-                                add them to the next answer.
-                              </p>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={closeFileDropzone}
-                              className="h-7 w-7 p-0 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-100"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="mt-3">
-                            <Dropzone
-                              maxFiles={5}
-                              accept={{
-                                "application/pdf": [".pdf"],
-                                "image/*": [
-                                  ".png",
-                                  ".jpg",
-                                  ".jpeg",
-                                  ".gif",
-                                  ".bmp",
-                                  ".webp",
-                                ],
-                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-                                  [".docx"],
-                                "application/json": [".json"],
-                              }}
-                              onDrop={handleFileDrop}
-                              onError={(error) => console.error(error)}
-                              src={dropzoneFiles}
-                              className="w-full border-2 border-dashed border-gray-300 bg-transparent px-4 py-6 hover:border-gray-400 dark:border-gray-700 dark:hover:border-gray-600"
-                            >
-                              <DropzoneEmptyState />
-                              <DropzoneContent />
-                            </Dropzone>
-                          </div>
-                        </div>
-                      )}
-                      {Object.keys(uploadingFiles).length > 0 && (
-                        <div className="space-y-2">
-                          {Object.entries(uploadingFiles).map(
-                            ([fileId, fileUpload]) => (
-                              <div
-                                key={fileId}
-                                className="rounded-lg border border-blue-200 bg-blue-50/80 px-3 py-2 text-blue-800 shadow-sm dark:border-blue-800/70 dark:bg-blue-900/20 dark:text-blue-200"
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2">
-                                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent dark:border-blue-400"></div>
-                                    <span className="text-xs font-medium">
-                                      Uploading and processing:{" "}
-                                      {fileUpload.fileName}
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={() => cancelFileUpload(fileId)}
-                                    className="flex h-5 w-5 items-center justify-center rounded-full text-blue-600 hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-800/30"
-                                    title="Cancel upload"
-                                  >
-                                    <svg
-                                      className="h-3 w-3"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M6 18L18 6M6 6l12 12"
-                                      />
-                                    </svg>
-                                  </button>
-                                </div>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      )}
-                      {libraryContextBanner}
-                      <div className="relative flex items-end">
-                        <DropdownMenu
-                          open={inputMenuOpen}
-                          onOpenChange={setInputMenuOpen}
-                        >
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="absolute left-1.5 sm:left-2 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8 rounded-xl bg-transparent hover:bg-gray-200/60 dark:hover:bg-gray-800/80 text-gray-500 dark:text-gray-300"
-                              tabIndex={-1}
-                            >
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="start"
-                            sideOffset={6}
-                            className="w-40 text-xs"
-                          >
-                            <DropdownMenuItem onSelect={handleFileMenuSelect}>
-                              <span className="inline-flex items-center">
-                                <FileText className="h-4 w-4 mr-1" />
-                                Files &amp; media
-                              </span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onSelect={() => {
-                                openLibraryCard();
-                              }}
-                            >
-                              <span className="inline-flex items-center">
-                                <Library className="h-4 w-4 mr-1" />
-                                Library
-                              </span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        <Textarea
-                          value={input}
-                          onChange={handleInputChange}
-                          placeholder="Ask a question..."
-                          className="w-full resize-none border-gray-200 dark:border-gray-700 rounded-2xl pl-10 sm:pl-12 pr-14 sm:pr-16 py-2.5 sm:py-3 min-h-[38px] sm:min-h-[40px] max-h-28 sm:max-h-32 focus:border-gray-300 dark:focus:border-gray-600 focus:ring-0 bg-gray-50 dark:bg-gray-900/50 overflow-y-auto text-sm sm:text-base"
-                          disabled={status === "error" || isLoading}
-                          rows={1}
-                          style={{ lineHeight: "1.5" }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault();
-                              handleSubmit(e);
-                            }
-                          }}
-                        />
-                        <Button
-                          type={canStop ? "button" : "submit"}
-                          onClick={canStop ? stop : undefined}
-                          disabled={
-                            !canStop &&
-                            (isLoading || !input.trim() || status === "error")
-                          }
-                          className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 rounded-xl h-7 w-7 sm:h-8 sm:w-8 p-0 bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-gray-200 dark:text-gray-900"
-                        >
-                          {canStop ? (
-                            <Square className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                          ) : isLoading ? (
-                            <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
-                          ) : (
-                            <svg
-                              className="h-3.5 w-3.5 sm:h-4 sm:w-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M5 12l14 0m-7-7l7 7-7 7"
-                              />
-                            </svg>
-                          )}
-                        </Button>
-                      </div>
-                    </form>
-
-                    {/* Powered by Valyu */}
-                    <motion.div
-                      className="flex items-center justify-center mt-4"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 1.1, duration: 0.5 }}
-                    >
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        Powered by
-                      </span>
-                      <a
-                        href="https://platform.valyu.network"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center hover:scale-105 transition-transform"
-                      >
-                        <Image
-                          src="/valyu.svg"
-                          alt="Valyu"
-                          width={60}
-                          height={60}
-                          className="h-4 opacity-60 hover:opacity-100 transition-opacity cursor-pointer dark:invert"
-                        />
-                      </a>
-                    </motion.div>
-                  </div>
-                </motion.div>
-              )}
-
-              <AnimatePresence initial={!virtualizationEnabled}>
-                {(virtualizationEnabled
-                  ? deferredMessages
-                      .slice(visibleRange.start, visibleRange.end)
-                      .map((message, i) => ({
-                        item: message,
-                        realIndex: visibleRange.start + i,
-                      }))
-                  : deferredMessages.map((m, i) => ({ item: m, realIndex: i }))
-                ).map(({ item: message }) => {
-                  const contextResources = contextResourceMap[message.id] || [];
-
-                  return (
-                    <motion.div
-                      key={message.id}
-                      data-message-id={message.id}
-                      className="group"
-                      initial={
-                        virtualizationEnabled
-                          ? undefined
-                          : { opacity: 0, y: 20 }
-                      }
-                      animate={
-                        virtualizationEnabled ? undefined : { opacity: 1, y: 0 }
-                      }
-                      exit={
-                        virtualizationEnabled
-                          ? undefined
-                          : { opacity: 0, y: -20 }
-                      }
-                      transition={{ duration: 0.3, ease: "easeOut" }}
-                    >
-                      {message.role === "user" ? (
-                        <>
-                          <div className="flex justify-end mb-3 px-3 sm:px-0">
-                            <div className="max-w-[85%] sm:max-w-[80%] bg-gray-100 dark:bg-gray-800 rounded-2xl px-4 sm:px-4 py-3 sm:py-3 relative group shadow-sm">
-                              {/* User Message Actions */}
-                              <div className="absolute -left-12 sm:-left-14 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 sm:gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleEditMessage(message.id)}
-                                  className="h-6 w-6 p-0 bg-white dark:bg-gray-900 rounded-full shadow-sm border border-gray-200 dark:border-gray-700"
-                                >
-                                  <Edit3 className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={async () => {
-                                    // Extract text content from the message
-                                    let textContent = "";
-                                    if (
-                                      message.parts &&
-                                      Array.isArray(message.parts)
-                                    ) {
-                                      const textPart = message.parts.find(
-                                        (p) => p.type === "text"
-                                      );
-                                      if (textPart && textPart.text) {
-                                        textContent = textPart.text;
-                                      }
-                                    } else if (
-                                      typeof message.parts === "string"
-                                    ) {
-                                      textContent = message.parts;
-                                    }
-
-                                    if (textContent) {
-                                      await copyToClipboard(textContent);
-                                      // Show "copied" notification
-                                      setCopiedMessageId(message.id);
-                                      // Hide notification after 2 seconds
-                                      setTimeout(() => {
-                                        setCopiedMessageId(null);
-                                      }, 2000);
-                                    }
-                                  }}
-                                  className="h-6 w-6 p-0 bg-white dark:bg-gray-900 rounded-full shadow-sm border border-gray-200 dark:border-gray-700 relative"
-                                  title={
-                                    copiedMessageId === message.id
-                                      ? "Copied!"
-                                      : "Copy message"
-                                  }
-                                >
-                                  {copiedMessageId === message.id ? (
-                                    <Check className="h-3 w-3 text-green-600" />
-                                  ) : (
-                                    <Copy className="h-3 w-3" />
-                                  )}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() =>
-                                    handleDeleteMessage(message.id)
-                                  }
-                                  className="h-6 w-6 p-0 bg-white dark:bg-gray-900 rounded-full shadow-sm border border-gray-200 dark:border-gray-700 text-red-500 hover:text-red-700"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-
-                              {editingMessageId === message.id ? (
-                                <div className="space-y-3">
-                                  <div className="relative">
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="sm"
-                                          className="absolute left-2 top-2.5 h-8 w-8 rounded-xl bg-transparent hover:bg-gray-200/60 dark:hover:bg-gray-800/80 text-gray-500 dark:text-gray-300 shadow-none"
-                                          tabIndex={-1}
-                                        >
-                                          <Plus className="h-4 w-4" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent
-                                        align="start"
-                                        sideOffset={6}
-                                        className="w-32 text-xs"
-                                      >
-                                        <DropdownMenuItem
-                                          onSelect={() => {
-                                            openLibraryCard();
-                                          }}
-                                        >
-                                          <span className="inline-flex items-center">
-                                            <Library className="h-4 w-4 mr-1" />
-                                            Library
-                                          </span>
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                    <Textarea
-                                      value={editingText}
-                                      onChange={(e) =>
-                                        setEditingText(e.target.value)
-                                      }
-                                      className="min-h-[80px] border-gray-200 dark:border-gray-600 rounded-xl pl-12"
-                                    />
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <Button
-                                      onClick={() => handleSaveEdit(message.id)}
-                                      size="sm"
-                                      disabled={!editingText.trim()}
-                                      className="rounded-full"
-                                    >
-                                      Save
-                                    </Button>
-                                    <Button
-                                      onClick={handleCancelEdit}
-                                      variant="outline"
-                                      size="sm"
-                                      className="rounded-full"
-                                    >
-                                      Cancel
-                                    </Button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="text-gray-900 dark:text-gray-100">
-                                  {(() => {
-                                    // If there are context resources (uploaded files), don't show the raw text
-                                    // The uploaded files will be displayed as result cards below
-                                    if (contextResources.length > 0) {
-                                      // Extract just the user's actual prompt text, excluding context instructions
-                                      if (
-                                        message.parts &&
-                                        Array.isArray(message.parts)
-                                      ) {
-                                        const textPart = message.parts.find(
-                                          (p) => p.type === "text"
-                                        );
-                                        if (textPart && textPart.text) {
-                                          const text = textPart.text;
-
-                                          // Look for the [USER PROMPT] marker to extract the original prompt
-                                          const userPromptMatch = text.match(
-                                            /\[USER PROMPT\]\s*\n([\s\S]+)$/
-                                          );
-                                          if (userPromptMatch) {
-                                            return userPromptMatch[1].trim();
-                                          }
-
-                                          // Fallback: if no [USER PROMPT] marker, try to extract before context blocks
-                                          const beforeContext = text
-                                            .split(/Context \[/)[0]
-                                            .trim();
-                                          if (
-                                            beforeContext &&
-                                            !beforeContext.includes(
-                                              "You must ground your answer"
-                                            )
-                                          ) {
-                                            return beforeContext;
-                                          }
-
-                                          return "Files uploaded";
-                                        }
-                                      }
-                                      return "Files uploaded";
-                                    }
-
-                                    // Handle different message content formats when no context resources
-                                    if (
-                                      message.parts &&
-                                      Array.isArray(message.parts)
-                                    ) {
-                                      const textPart = message.parts.find(
-                                        (p) => p.type === "text"
-                                      );
-                                      if (textPart && textPart.text) {
-                                        return textPart.text;
-                                      }
-                                    }
-
-                                    // Fallback: if parts is not properly formatted, try to extract text
-                                    if (typeof message.parts === "string") {
-                                      return message.parts;
-                                    }
-
-                                    // Last resort: return a default message
-                                    return "Message content not available";
-                                  })()}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {contextResources.length > 0 ? (
-                            <div className="mb-4 sm:mb-6 px-3 sm:px-0">
-                              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 sm:p-4 shadow-sm">
-                                <div className="flex items-center justify-between gap-3 mb-3">
-                                  <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
-                                    <CheckCircle className="h-4 w-4" />
-                                    <span className="font-medium">
-                                      Input Context
-                                    </span>
-                                    <span className="text-xs text-blue-600 dark:text-blue-300">
-                                      ({contextResources.length} resources)
-                                    </span>
-                                  </div>
-                                </div>
-                                <SearchResultsCarousel
-                                  results={contextResources.map(
-                                    formatSavedItemForCard
-                                  )}
-                                  type="web"
-                                  messageId={message.id}
-                                  toolName="queued-context"
-                                />
-                              </div>
-                            </div>
-                          ) : null}
-                        </>
-                      ) : (
-                        /* Assistant Message */
-                        <div className="mb-4 sm:mb-6 group px-3 sm:px-0">
-                          {editingMessageId === message.id ? null : (
-                            <div className="space-y-4">
-                              {(() => {
-                                // Group consecutive reasoning steps together
-                                const groupedParts: any[] = [];
-                                let currentReasoningGroup: any[] = [];
-
-                                message.parts.forEach((part, index) => {
-                                  if (
-                                    part.type === "reasoning" &&
-                                    part.text &&
-                                    part.text.trim() !== ""
-                                  ) {
-                                    currentReasoningGroup.push({ part, index });
-                                  } else {
-                                    if (currentReasoningGroup.length > 0) {
-                                      groupedParts.push({
-                                        type: "reasoning-group",
-                                        parts: currentReasoningGroup,
-                                      });
-                                      currentReasoningGroup = [];
-                                    }
-                                    groupedParts.push({
-                                      type: "single",
-                                      part,
-                                      index,
-                                    });
-                                  }
-                                });
-
-                                // Add any remaining reasoning group
-                                if (currentReasoningGroup.length > 0) {
-                                  groupedParts.push({
-                                    type: "reasoning-group",
-                                    parts: currentReasoningGroup,
-                                  });
-                                }
-
-                                return groupedParts.map((group, groupIndex) => {
-                                  if (group.type === "reasoning-group") {
-                                    // Render combined reasoning component
-                                    const combinedText = group.parts
-                                      .map((item: any) => item.part.text)
-                                      .join("\n\n");
-                                    const firstPart = group.parts[0].part;
-                                    const isStreaming = group.parts.some(
-                                      (item: any) =>
-                                        item.part.state === "streaming" ||
-                                        status === "streaming"
-                                    );
-
-                                    return (
-                                      <ReasoningComponent
-                                        key={`reasoning-group-${groupIndex}`}
-                                        part={{
-                                          ...firstPart,
-                                          text: combinedText,
-                                        }}
-                                        messageId={message.id}
-                                        index={groupIndex}
-                                        status={
-                                          isStreaming ? "streaming" : status
-                                        }
-                                        expandedTools={expandedTools}
-                                        toggleToolExpansion={
-                                          toggleToolExpansion
-                                        }
-                                      />
-                                    );
-                                  } else {
-                                    // Render single part normally
-                                    const { part, index } = group;
-
-                                    switch (part.type) {
-                                      // Text parts
-                                      case "text":
-                                        return (
-                                          <div
-                                            key={index}
-                                            className="prose prose-sm max-w-none dark:prose-invert"
-                                          >
-                                            {(() => {
-                                              // Collect citations from tool results that appear BEFORE this text part
-                                              const citations: CitationMap = {};
-                                              let citationNumber = 1;
-
-                                              // Find the current part's index
-                                              const currentPartIndex =
-                                                message.parts.findIndex(
-                                                  (p: any) => p === part
-                                                );
-
-                                              // Look for tool results that come BEFORE this text part
-                                              // This ensures citations match the order the AI references them
-                                              for (
-                                                let i = 0;
-                                                i < currentPartIndex;
-                                                i++
-                                              ) {
-                                                const p = message.parts[i];
-
-                                                // Check for search tool results (web search, patent search, and federal spending search)
-                                                if (
-                                                  (p.type ===
-                                                    "tool-webSearch" ||
-                                                    p.type ===
-                                                      "tool-patentsSearch" ||
-                                                    p.type ===
-                                                      "tool-USAfedSearch") &&
-                                                  p.state ===
-                                                    "output-available" &&
-                                                  p.output
-                                                ) {
-                                                  try {
-                                                    const output =
-                                                      typeof p.output ===
-                                                      "string"
-                                                        ? JSON.parse(p.output)
-                                                        : (p as any).output; // lol sorry
-
-                                                    // Check if this is a search result with multiple items
-                                                    if (
-                                                      output.results &&
-                                                      Array.isArray(
-                                                        output.results
-                                                      )
-                                                    ) {
-                                                      output.results.forEach(
-                                                        (item: any) => {
-                                                          const key = `[${citationNumber}]`;
-                                                          // Ensure description is a string, not an object
-                                                          let description =
-                                                            item.content ||
-                                                            item.summary ||
-                                                            item.description ||
-                                                            "";
-                                                          if (
-                                                            typeof description ===
-                                                            "object"
-                                                          ) {
-                                                            description =
-                                                              JSON.stringify(
-                                                                description
-                                                              );
-                                                          }
-                                                          citations[key] = [
-                                                            {
-                                                              number:
-                                                                citationNumber.toString(),
-                                                              title:
-                                                                item.title ||
-                                                                `Source ${citationNumber}`,
-                                                              url:
-                                                                item.url || "",
-                                                              description:
-                                                                description,
-                                                              source:
-                                                                item.source,
-                                                              date: item.date,
-                                                              authors:
-                                                                Array.isArray(
-                                                                  item.authors
-                                                                )
-                                                                  ? item.authors
-                                                                  : [],
-                                                              doi: item.doi,
-                                                              relevanceScore:
-                                                                item.relevanceScore ||
-                                                                item.relevance_score,
-                                                              toolType:
-                                                                p.type ===
-                                                                "tool-webSearch"
-                                                                  ? "web"
-                                                                  : p.type ===
-                                                                    "tool-patentsSearch"
-                                                                  ? "web"
-                                                                  : p.type ===
-                                                                    "tool-USAfedSearch"
-                                                                  ? "web"
-                                                                  : "web",
-                                                            },
-                                                          ];
-                                                          citationNumber++;
-
-                                                          // Log each citation as it's added
-                                                          console.log(
-                                                            `[Citations] Added citation [${
-                                                              citationNumber - 1
-                                                            }]:`,
-                                                            item.title ||
-                                                              "Untitled"
-                                                          );
-                                                        }
-                                                      );
-                                                    }
-                                                  } catch (error) {
-                                                    console.error(
-                                                      "Error extracting citations from tool:",
-                                                      p.type,
-                                                      error
-                                                    );
-                                                  }
-                                                }
-                                              }
-
-                                              // Debug: Log citations collected
-                                              if (
-                                                Object.keys(citations).length >
-                                                0
-                                              ) {
-                                                console.log(
-                                                  "[Citations] Total citations collected for text part:",
-                                                  Object.keys(citations).length,
-                                                  citations
-                                                );
-                                              }
-
-                                              // If we have citations, use the citation renderer, otherwise use regular markdown
-                                              if (
-                                                Object.keys(citations).length >
-                                                0
-                                              ) {
-                                                return (
-                                                  <CitationTextRenderer
-                                                    text={part.text}
-                                                    citations={citations}
-                                                  />
-                                                );
-                                              } else {
-                                                return (
-                                                  <MemoizedMarkdown
-                                                    text={part.text}
-                                                  />
-                                                );
-                                              }
-                                            })()}
-                                          </div>
-                                        );
-
-                                      // Skip individual reasoning parts as they're handled in groups
-                                      case "reasoning":
-                                        return null;
-
-                                      // Web Search Tool
-                                      case "tool-webSearch": {
-                                        const callId = part.toolCallId;
-                                        switch (part.state) {
-                                          case "input-streaming":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-cyan-700 dark:text-cyan-400 mb-2">
-                                                  <span className="text-lg">
-                                                    🌐
-                                                  </span>
-                                                  <span className="font-medium">
-                                                    Web Search
-                                                  </span>
-                                                  <Clock className="h-3 w-3 animate-spin" />
-                                                </div>
-                                                <div className="text-sm text-cyan-600 dark:text-cyan-300">
-                                                  Preparing web search...
-                                                </div>
-                                              </div>
-                                            );
-                                          case "input-available":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-cyan-700 dark:text-cyan-400 mb-2">
-                                                  <span className="text-lg">
-                                                    🌐
-                                                  </span>
-                                                  <span className="font-medium">
-                                                    Web Search
-                                                  </span>
-                                                  <Clock className="h-3 w-3 animate-spin" />
-                                                </div>
-                                                <div className="text-sm text-cyan-600 dark:text-cyan-300">
-                                                  <div className="bg-cyan-100 dark:bg-cyan-800/30 p-2 rounded">
-                                                    <div className="text-xs">
-                                                      Searching for: &quot;
-                                                      {part.input.query}&quot;
-                                                    </div>
-                                                  </div>
-                                                  <div className="mt-2 text-xs">
-                                                    Searching the world wide
-                                                    web...
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            );
-                                          case "output-available":
-                                            const webResults =
-                                              extractSearchResults(part.output);
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 sm:p-4"
-                                              >
-                                                <div className="flex items-center justify-between gap-3 mb-4">
-                                                  <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
-                                                    <CheckCircle className="h-4 w-4" />
-                                                    <span className="font-medium">
-                                                      Web Search Results
-                                                    </span>
-                                                    <span className="text-xs text-blue-600 dark:text-blue-300">
-                                                      ({webResults.length}{" "}
-                                                      results)
-                                                    </span>
-                                                  </div>
-                                                  {part.input?.query && (
-                                                    <div
-                                                      className="text-xs font-mono text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded border border-blue-200 dark:border-blue-700 max-w-[60%] truncate"
-                                                      title={part.input.query}
-                                                    >
-                                                      {part.input.query}
-                                                    </div>
-                                                  )}
-                                                </div>
-                                                <SearchResultsCarousel
-                                                  results={webResults}
-                                                  type="web"
-                                                  toolName="webSearch"
-                                                  messageId={message.id}
-                                                />
-                                              </div>
-                                            );
-                                          case "output-error":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-red-700 dark:text-red-400 mb-2">
-                                                  <AlertCircle className="h-4 w-4" />
-                                                  <span className="font-medium">
-                                                    Web Search Error
-                                                  </span>
-                                                </div>
-                                                <div className="text-sm text-red-600 dark:text-red-300">
-                                                  {part.errorText}
-                                                </div>
-                                              </div>
-                                            );
-                                        }
-                                        break;
-                                      }
-
-                                      // Patent Search Tool
-                                      case "tool-patentsSearch": {
-                                        const callId = part.toolCallId;
-                                        switch (part.state) {
-                                          case "input-streaming":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-green-700 dark:text-green-400 mb-2">
-                                                  <span className="text-lg">
-                                                    🔬
-                                                  </span>
-                                                  <span className="font-medium">
-                                                    Patent Search
-                                                  </span>
-                                                  <Clock className="h-3 w-3 animate-spin" />
-                                                </div>
-                                                <div className="text-sm text-green-600 dark:text-green-300">
-                                                  Preparing patent search...
-                                                </div>
-                                              </div>
-                                            );
-                                          case "input-available":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-green-700 dark:text-green-400 mb-2">
-                                                  <span className="text-lg">
-                                                    🔬
-                                                  </span>
-                                                  <span className="font-medium">
-                                                    Patent Search
-                                                  </span>
-                                                  <Clock className="h-3 w-3 animate-spin" />
-                                                </div>
-                                                <div className="text-sm text-green-600 dark:text-green-300">
-                                                  <div className="bg-green-100 dark:bg-green-800/30 p-2 rounded">
-                                                    <div className="text-xs">
-                                                      Searching for: &quot;
-                                                      {part.input.query}&quot;
-                                                    </div>
-                                                  </div>
-                                                  <div className="mt-2 text-xs">
-                                                    Searching patent
-                                                    databases...
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            );
-                                          case "output-available":
-                                            const patentResults =
-                                              extractSearchResults(part.output);
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 sm:p-4"
-                                              >
-                                                <div className="flex items-center justify-between gap-3 mb-4">
-                                                  <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                                                    <CheckCircle className="h-4 w-4" />
-                                                    <span className="font-medium">
-                                                      Patent Search Results
-                                                    </span>
-                                                    <span className="text-xs text-green-600 dark:text-green-300">
-                                                      ({patentResults.length}{" "}
-                                                      results)
-                                                    </span>
-                                                  </div>
-                                                  {part.input?.query && (
-                                                    <div
-                                                      className="text-xs font-mono text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 px-3 py-1 rounded border border-green-200 dark:border-green-700 max-w-[60%] truncate"
-                                                      title={part.input.query}
-                                                    >
-                                                      {part.input.query}
-                                                    </div>
-                                                  )}
-                                                </div>
-                                                <SearchResultsCarousel
-                                                  results={patentResults}
-                                                  type="web"
-                                                  toolName="patentsSearch"
-                                                  messageId={message.id}
-                                                />
-                                              </div>
-                                            );
-                                          case "output-error":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-red-700 dark:text-red-400 mb-2">
-                                                  <AlertCircle className="h-4 w-4" />
-                                                  <span className="font-medium">
-                                                    Patent Search Error
-                                                  </span>
-                                                </div>
-                                                <div className="text-sm text-red-600 dark:text-red-300">
-                                                  {part.errorText}
-                                                </div>
-                                              </div>
-                                            );
-                                        }
-                                        break;
-                                      }
-
-                                      // US Federal Spending Search Tool (now orange)
-                                      case "tool-USAfedSearch": {
-                                        const callId = part.toolCallId;
-                                        switch (part.state) {
-                                          case "input-streaming":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400 mb-2">
-                                                  <span className="text-lg">
-                                                    🏛️
-                                                  </span>
-                                                  <span className="font-medium">
-                                                    US Federal Spending Search
-                                                  </span>
-                                                  <Clock className="h-3 w-3 animate-spin" />
-                                                </div>
-                                                <div className="text-sm text-orange-600 dark:text-orange-300">
-                                                  Preparing federal spending
-                                                  search...
-                                                </div>
-                                              </div>
-                                            );
-                                          case "input-available":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400 mb-2">
-                                                  <span className="text-lg">
-                                                    🏛️
-                                                  </span>
-                                                  <span className="font-medium">
-                                                    US Federal Spending Search
-                                                  </span>
-                                                  <Clock className="h-3 w-3 animate-spin" />
-                                                </div>
-                                                <div className="text-sm text-orange-600 dark:text-orange-300">
-                                                  <div className="bg-orange-100 dark:bg-orange-800/30 p-2 rounded">
-                                                    <div className="text-xs">
-                                                      Searching for: &quot;
-                                                      {part.input.query}&quot;
-                                                    </div>
-                                                  </div>
-                                                  <div className="mt-2 text-xs">
-                                                    Searching federal spending
-                                                    databases...
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            );
-                                          case "output-available":
-                                            const federalResults =
-                                              extractSearchResults(part.output);
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3 sm:p-4"
-                                              >
-                                                <div className="flex items-center justify-between gap-3 mb-4">
-                                                  <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
-                                                    <CheckCircle className="h-4 w-4" />
-                                                    <span className="font-medium">
-                                                      US Federal Spending
-                                                      Results
-                                                    </span>
-                                                    <span className="text-xs text-orange-600 dark:text-orange-300">
-                                                      ({federalResults.length}{" "}
-                                                      results)
-                                                    </span>
-                                                  </div>
-                                                  {part.input?.query && (
-                                                    <div
-                                                      className="text-xs font-mono text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded border border-orange-200 dark:border-orange-700 max-w-[60%] truncate"
-                                                      title={part.input.query}
-                                                    >
-                                                      {part.input.query}
-                                                    </div>
-                                                  )}
-                                                </div>
-                                                <SearchResultsCarousel
-                                                  results={federalResults}
-                                                  type="web"
-                                                  toolName="USAfedSearch"
-                                                  messageId={message.id}
-                                                />
-                                              </div>
-                                            );
-                                          case "output-error":
-                                            return (
-                                              <div
-                                                key={callId}
-                                                className="mt-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 sm:p-3"
-                                              >
-                                                <div className="flex items-center gap-2 text-red-700 dark:text-red-400 mb-2">
-                                                  <AlertCircle className="h-4 w-4" />
-                                                  <span className="font-medium">
-                                                    US Federal Spending Search
-                                                    Error
-                                                  </span>
-                                                </div>
-                                                <div className="text-sm text-red-600 dark:text-red-300">
-                                                  {part.errorText}
-                                                </div>
-                                              </div>
-                                            );
-                                        }
-                                        break;
-                                      }
-
-                                      // Generic dynamic tool fallback (for future tools)
-                                      case "dynamic-tool":
-                                        return (
-                                          <div
-                                            key={index}
-                                            className="mt-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded p-2 sm:p-3"
-                                          >
-                                            <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 mb-2">
-                                              <Wrench className="h-4 w-4" />
-                                              <span className="font-medium">
-                                                Tool: {part.toolName}
-                                              </span>
-                                            </div>
-                                            <div className="text-sm text-purple-600 dark:text-purple-300">
-                                              {part.state ===
-                                                "input-streaming" && (
-                                                <pre className="bg-purple-100 dark:bg-purple-800/30 p-2 rounded text-xs">
-                                                  {JSON.stringify(
-                                                    part.input,
-                                                    null,
-                                                    2
-                                                  )}
-                                                </pre>
-                                              )}
-                                              {part.state ===
-                                                "output-available" && (
-                                                <pre className="bg-purple-100 dark:bg-purple-800/30 p-2 rounded text-xs">
-                                                  {JSON.stringify(
-                                                    part.output,
-                                                    null,
-                                                    2
-                                                  )}
-                                                </pre>
-                                              )}
-                                              {part.state ===
-                                                "output-error" && (
-                                                <div className="text-red-600 dark:text-red-300">
-                                                  Error: {part.errorText}
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                                        );
-
-                                      default:
-                                        return null;
-                                    }
-                                  }
-                                });
-                              })()}
-                            </div>
-                          )}
-
-                          {/* Message Actions */}
-                          {message.role === "assistant" && (
-                            <div className="flex justify-end gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                              {messages[messages.length - 1]?.id ===
-                                message.id &&
-                                canRegenerate && (
-                                  <Button
-                                    onClick={() => {
-                                      track("Message Regenerated", {
-                                        messageCount: messages.length,
-                                        lastMessageRole:
-                                          messages[messages.length - 1]?.role,
-                                      });
-                                      regenerate();
-                                    }}
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={
-                                      status !== "ready" && status !== "error"
-                                    }
-                                    className="h-7 px-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                                  >
-                                    <RotateCcw className="h-3 w-3" />
-                                  </Button>
-                                )}
-
-                              {!isLoading && (
-                                <Button
-                                  onClick={() =>
-                                    copyToClipboard(getMessageText(message))
-                                  }
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-              {virtualizationEnabled && (
-                <>
-                  <div
-                    style={{
-                      height: Math.max(0, visibleRange.start * avgRowHeight),
-                    }}
-                  />
-                  <div
-                    style={{
-                      height: Math.max(
-                        0,
-                        (deferredMessages.length - visibleRange.end) *
-                          avgRowHeight
-                      ),
-                    }}
-                  />
-                </>
-              )}
-
-              {/* Coffee Loading Message */}
-              <AnimatePresence>
-                {status === "submitted" &&
-                  messages.length > 0 &&
-                  messages[messages.length - 1]?.role === "user" && (
-                    <motion.div
-                      className="mb-6"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.3, ease: "easeOut" }}
-                    >
-                      <div className="flex items-start gap-2">
-                        <div className="text-amber-600 dark:text-amber-400 text-lg mt-0.5">
-                          ☕
-                        </div>
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2 max-w-xs">
-                          <div className="text-amber-700 dark:text-amber-300 text-sm">
-                            Just grabbing a coffee and contemplating the meaning
-                            of life... ☕️
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-              </AnimatePresence>
-
-              <div ref={messagesEndRef} />
-              <div ref={bottomAnchorRef} className="h-px w-full" />
-            </div>
-
-            {/* Gradient fade above input form */}
-            <AnimatePresence>
-              {(isFormAtBottom || isMobile) && (
-                <>
-                  <motion.div
-                    className="fixed left-1/2 -translate-x-1/2 bottom-0 w-full max-w-3xl h-36 pointer-events-none z-45"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                  >
-                    <div
-                      className="dark:hidden absolute inset-0"
-                      style={{
-                        background:
-                          "linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.98) 30%, rgba(255,255,255,0.8) 60%, rgba(255,255,255,0) 100%)",
-                      }}
-                    />
-                    <div
-                      className="hidden dark:block absolute inset-0"
-                      style={{
-                        background:
-                          "linear-gradient(to top, rgb(3 7 18) 0%, rgb(3 7 18 / 0.98) 30%, rgb(3 7 18 / 0.8) 60%, transparent 100%)",
-                      }}
-                    />
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-
-            {/* Error Display */}
-            {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
-                  <AlertCircle className="h-4 w-4" />
-                  <span className="font-medium">
-                    {error.message?.includes("PAYMENT_REQUIRED")
-                      ? "Payment Setup Required"
-                      : "Something went wrong"}
-                  </span>
-                </div>
-                <p className="text-red-600 dark:text-red-400 text-sm mt-1">
-                  {error.message?.includes("PAYMENT_REQUIRED")
-                    ? "You need to set up a payment method to use the pay-per-use plan. You only pay for what you use."
-                    : "Please check your API keys and try again."}
-                </p>
-                <Button
-                  onClick={() => {
-                    if (error.message?.includes("PAYMENT_REQUIRED")) {
-                      // Redirect to subscription setup
-                      const url = `/api/checkout?plan=pay_per_use&redirect=${encodeURIComponent(
-                        window.location.href
-                      )}`;
-                      window.location.href = url;
-                    } else {
-                      window.location.reload();
+                  <motion.button
+                    onClick={() =>
+                      handlePromptClick(
+                        "Analyze Google's patent portfolio in artificial intelligence filed from 2020-2024. Show filing trends over time, identify top CPC classifications, and compare with Microsoft's AI patent activity. Create visualizations showing: 1) Filing trends by year, 2) Technology focus areas, 3) Top inventors and their specializations."
+                      )
                     }
-                  }}
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 text-red-700 border-red-300 hover:bg-red-100 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
-                >
-                  {error.message?.includes("PAYMENT_REQUIRED") ? (
-                    <>
-                      <span className="mr-1">💳</span>
-                      Setup Payment
-                    </>
-                  ) : (
-                    <>
-                      <RotateCcw className="h-3 w-3 mr-1" />
-                      Retry
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-
-            {/* Input Form at bottom */}
-            <AnimatePresence>
-              {(isFormAtBottom || isMobile) && (
-                <motion.div
-                  className="fixed left-1/2 -translate-x-1/2 bottom-0 w-full max-w-3xl px-3 sm:px-6 pt-4 sm:pt-5 pb-6 sm:pb-7 z-50"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                >
-                  <form
-                    onSubmit={handleSubmit}
-                    className="max-w-3xl mx-auto space-y-2"
+                    className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4, duration: 0.5 }}
+                    whileTap={{ scale: 0.98 }}
                   >
-                    {showFileDropzone && (
-                      <div className="rounded-2xl border border-dashed border-gray-300 bg-white/80 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/40">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium text-sm text-gray-800 dark:text-gray-200">
-                              Attach files &amp; media
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              Drop files below or click to browse. We&apos;ll
-                              add them to the next answer.
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={closeFileDropzone}
-                            className="h-7 w-7 p-0 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-100"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="mt-3">
-                          <Dropzone
-                            maxFiles={5}
-                            accept={{
-                              "application/pdf": [".pdf"],
-                              "image/*": [
-                                ".png",
-                                ".jpg",
-                                ".jpeg",
-                                ".gif",
-                                ".bmp",
-                                ".webp",
-                              ],
-                              "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-                                [".docx"],
-                              "application/json": [".json"],
-                            }}
-                            onDrop={handleFileDrop}
-                            onError={(error) => console.error(error)}
-                            src={dropzoneFiles}
-                            className="w-full border-2 border-dashed border-gray-300 bg-transparent px-4 py-6 hover:border-gray-400 dark:border-gray-700 dark:hover:border-gray-600"
-                          >
-                            <DropzoneEmptyState />
-                            <DropzoneContent />
-                          </Dropzone>
-                        </div>
-                      </div>
-                    )}
-                    {Object.keys(uploadingFiles).length > 0 && (
-                      <div className="space-y-2">
-                        {Object.entries(uploadingFiles).map(
-                          ([fileId, fileUpload]) => (
-                            <div
-                              key={fileId}
-                              className="rounded-lg border border-blue-200 bg-blue-50/80 px-3 py-2 text-blue-800 shadow-sm dark:border-blue-800/70 dark:bg-blue-900/20 dark:text-blue-200"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent dark:border-blue-400"></div>
-                                  <span className="text-xs font-medium">
-                                    Uploading and processing:{" "}
-                                    {fileUpload.fileName}
-                                  </span>
-                                </div>
-                                <button
-                                  onClick={() => cancelFileUpload(fileId)}
-                                  className="flex h-5 w-5 items-center justify-center rounded-full text-blue-600 hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-800/30"
-                                  title="Cancel upload"
-                                >
-                                  <svg
-                                    className="h-3 w-3"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M6 18L18 6M6 6l12 12"
-                                    />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    )}
-                    {libraryContextBanner}
-                    <div className="relative flex items-end">
-                      {/* Plus button for Library dropdown */}
-                      <DropdownMenu
-                        open={inputMenuOpen}
-                        onOpenChange={setInputMenuOpen}
+                    <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
+                      📊 Portfolio Analysis
+                    </div>
+                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                      Google vs Microsoft AI patents
+                    </div>
+                  </motion.button>
+
+                  <motion.button
+                    onClick={() =>
+                      handlePromptClick(
+                        "Conduct a freedom-to-operate analysis for CRISPR gene editing in therapeutic applications. Search for active patents covering Cas9 systems, guide RNA design, and delivery methods. Identify blocking patents owned by Broad Institute, UC Berkeley, and Editas Medicine. Generate a risk assessment matrix with patent numbers, claim coverage, and expiration dates."
+                      )
+                    }
+                    className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5, duration: 0.5 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
+                      ⚖️ Freedom-to-Operate
+                    </div>
+                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                      CRISPR patent landscape & FTO
+                    </div>
+                  </motion.button>
+
+                  <motion.button
+                    onClick={() =>
+                      handlePromptClick(
+                        "Find all patents filed by Tesla in battery technology from 2015-2024. Focus on solid-state batteries, lithium-sulfur chemistry, and battery management systems. Create a CSV with: patent numbers, titles, filing dates, current status, and key claims. Identify which patents cover the 4680 battery cell design."
+                      )
+                    }
+                    className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6, duration: 0.5 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
+                      🔋 Competitive Intel
+                    </div>
+                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                      Tesla battery patent portfolio
+                    </div>
+                  </motion.button>
+
+                  <motion.button
+                    onClick={() =>
+                      handlePromptClick(
+                        "Compare patent portfolios of OpenAI, Anthropic, and Google DeepMind in large language models. Analyze filing trends, citation networks, and technology focus areas. Create visualizations showing: 1) Patent filing velocity 2020-2024, 2) Citation impact scores, 3) Technology clustering (training methods, inference optimization, safety techniques). Use Python to calculate portfolio strength metrics."
+                      )
+                    }
+                    className="bg-gray-50 dark:bg-gray-800/50 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-left group"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.7, duration: 0.5 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <div className="text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-gray-900 dark:group-hover:text-gray-100">
+                      🤖 LLM Landscape
+                    </div>
+                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                      OpenAI vs Anthropic vs DeepMind
+                    </div>
+                  </motion.button>
+
+                  <motion.button
+                    onClick={() =>
+                      handlePromptClick(
+                        "Search for invalidating prior art for US Patent 11,234,567 covering a 'method for real-time object detection using convolutional neural networks.' Find patents and publications from before the 2018 priority date that disclose: CNN architectures for object detection, real-time inference optimization, and mobile deployment. Create a comprehensive claim chart mapping prior art elements to each claim limitation. Identify the strongest anticipation and obviousness arguments."
+                      )
+                    }
+                    className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 p-2.5 sm:p-4 rounded-xl border border-blue-200 dark:border-blue-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/30 dark:hover:to-purple-900/30 text-left group col-span-1 sm:col-span-2 lg:col-span-1"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.8, duration: 0.5 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <div className="text-blue-700 dark:text-blue-300 mb-1.5 sm:mb-2 text-xs sm:text-sm font-medium group-hover:text-blue-900 dark:group-hover:text-blue-100">
+                      🚀 Invalidation Search
+                    </div>
+                    <div className="text-[10px] sm:text-xs text-blue-600 dark:text-blue-400">
+                      Prior art + Claim chart + Litigation support
+                    </div>
+                  </motion.button>
+                </div>
+
+                <div className="mt-4 sm:mt-8">
+                  <DataSourceLogos />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Input Form when not at bottom (desktop only) */}
+        {!isFormAtBottom && messages.length === 0 && !isMobile && (
+          <motion.div
+            className="mt-8 mb-16"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9, duration: 0.5 }}
+          >
+            <div className="w-full max-w-3xl mx-auto px-4 sm:px-6">
+              {/* Metrics Pills - connected to input box */}
+              {messages.length > 0 && (
+                <div className="mb-2">
+                  <MetricsPills metrics={cumulativeMetrics} />
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+                <div className="relative flex items-end">
+                  <Textarea
+                    value={input}
+                    onChange={handleInputChange}
+                    placeholder="Ask a question..."
+                    className="w-full resize-none rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 pr-14 sm:pr-16 min-h-[38px] sm:min-h-[40px] max-h-28 sm:max-h-32 overflow-y-auto text-sm sm:text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 focus:border-gray-400 dark:focus:border-gray-600 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-sm"
+                    disabled={status === "error" || isLoading}
+                    rows={1}
+                    style={{ lineHeight: "1.5" }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSubmit(e);
+                      }
+                    }}
+                  />
+                  <Button
+                    type={canStop ? "button" : "submit"}
+                    onClick={canStop ? handleStop : undefined}
+                    disabled={
+                      !canStop &&
+                      (isLoading || !input.trim() || status === "error")
+                    }
+                    className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 rounded-xl h-7 w-7 sm:h-8 sm:w-8 p-0 bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-gray-200 dark:text-gray-900"
+                  >
+                    {canStop ? (
+                      <Square className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    ) : isLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                    ) : (
+                      <svg
+                        className="h-3.5 w-3.5 sm:h-4 sm:w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            type="button"
-                            size="sm"
-                            // Ensure the button is visible and not covered
-                            className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-transparent hover:bg-gray-200/60 dark:hover:bg-gray-800/80 text-gray-500 dark:text-gray-300 shadow-none z-10"
-                            tabIndex={-1}
-                            aria-label="Open Library"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          sideOffset={6}
-                          className="w-36 text-xs"
-                        >
-                          <DropdownMenuItem onSelect={handleFileMenuSelect}>
-                            <span className="inline-flex items-center">
-                              <FileText className="h-4 w-4 mr-1" />
-                              Files &amp; media
-                            </span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              openLibraryCard();
-                            }}
-                          >
-                            <span className="inline-flex items-center">
-                              <Library className="h-4 w-4 mr-1" />
-                              Library
-                            </span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <Textarea
-                        value={input}
-                        onChange={handleInputChange}
-                        placeholder="Ask a question..."
-                        className="w-full resize-none border-gray-200 dark:border-gray-700 rounded-2xl pl-12 sm:pl-14 pr-14 sm:pr-16 py-3 sm:py-3 min-h-[44px] sm:min-h-[48px] max-h-28 sm:max-h-32 focus:border-gray-300 dark:focus:border-gray-600 focus:ring-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm overflow-y-auto text-base shadow-lg border"
-                        disabled={status === "error" || isLoading}
-                        rows={1}
-                        style={{ lineHeight: "1.5" }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSubmit(e);
-                          }
-                        }}
-                      />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 12l14 0m-7-7l7 7-7 7"
+                        />
+                      </svg>
+                    )}
+                  </Button>
+                </div>
+              </form>
+
+              {/* Powered by Valyu */}
+              <motion.div
+                className="flex items-center justify-center mt-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.1, duration: 0.5 }}
+              >
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  Powered by
+                </span>
+                <a
+                  href="https://platform.valyu.ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center hover:scale-105 transition-transform"
+                >
+                  <Image
+                    src="/valyu.svg"
+                    alt="Valyu"
+                    width={60}
+                    height={60}
+                    className="h-4 opacity-60 hover:opacity-100 transition-opacity cursor-pointer dark:invert"
+                  />
+                </a>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+
+        <AnimatePresence initial={!virtualizationEnabled}>
+          {(virtualizationEnabled
+            ? deferredMessages
+                .slice(visibleRange.start, visibleRange.end)
+                .map((message, i) => ({
+                  item: message,
+                  realIndex: visibleRange.start + i,
+                }))
+            : displayMessages.map((m, i) => ({ item: m, realIndex: i }))
+          ).map(({ item: message, realIndex }) => (
+            <motion.div
+              key={message.id}
+              className="group"
+              initial={
+                virtualizationEnabled ? undefined : { opacity: 0, y: 20 }
+              }
+              animate={virtualizationEnabled ? undefined : { opacity: 1, y: 0 }}
+              exit={virtualizationEnabled ? undefined : { opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              {message.role === "user" ? (
+                /* User Message */
+                <div className="flex justify-end mb-4 sm:mb-6 px-3 sm:px-0">
+                  <div className="max-w-[85%] sm:max-w-[80%] bg-gray-100 dark:bg-gray-800 rounded-2xl px-4 sm:px-4 py-3 sm:py-3 relative group shadow-sm">
+                    {/* User Message Actions */}
+                    <div className="absolute -left-8 sm:-left-10 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 sm:gap-1">
                       <Button
-                        type={canStop ? "button" : "submit"}
-                        onClick={canStop ? stop : undefined}
-                        disabled={
-                          !canStop &&
-                          (isLoading || !input.trim() || status === "error")
-                        }
-                        className="absolute right-2 sm:right-2 top-1/2 -translate-y-1/2 rounded-xl h-8 w-8 sm:h-9 sm:w-9 p-0 bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-gray-200 dark:text-gray-900 shadow-lg"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditMessage(message.id)}
+                        className="h-6 w-6 p-0 bg-white dark:bg-gray-900 rounded-full shadow-sm border border-gray-200 dark:border-gray-700"
                       >
-                        {canStop ? (
-                          <Square className="h-4 w-4" />
-                        ) : isLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 12l14 0m-7-7l7 7-7 7"
-                            />
-                          </svg>
-                        )}
+                        <Edit3 className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteMessage(message.id)}
+                        className="h-6 w-6 p-0 bg-white dark:bg-gray-900 rounded-full shadow-sm border border-gray-200 dark:border-gray-700 text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
-                  </form>
 
-                  {/* Mobile Bottom Bar - Social links and disclaimer below input */}
-                  <motion.div
-                    className="block sm:hidden mt-4 pt-3 border-t border-gray-200 dark:border-gray-700"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5, duration: 0.3 }}
-                  >
-                    <div className="flex flex-col items-center space-y-3">
-                      <div className="flex items-center justify-center space-x-4">
-                        <SocialLinks />
-                      </div>
-                      <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center">
-                        Not financial advice.
-                      </p>
-                    </div>
-                  </motion.div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <Dialog open={showLibraryCard} onOpenChange={setShowLibraryCard}>
-            <DialogContent className="sm:max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Saved Library</DialogTitle>
-                <DialogDescription>
-                  Select a collection to review the answers you&apos;ve saved.
-                </DialogDescription>
-              </DialogHeader>
-
-              {savedCollections.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      Collection
-                    </p>
-                    <Select
-                      value={resolvedLibraryCollectionId ?? undefined}
-                      onValueChange={handleLibraryCollectionChange}
-                    >
-                      <SelectTrigger className="w-full justify-between">
-                        <SelectValue placeholder="Select a collection" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {savedCollections.map((collection) => (
-                          <SelectItem key={collection.id} value={collection.id}>
-                            {collection.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="max-h-72 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/40">
-                    {librarySelectionPending ? (
-                      <div className="p-6 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Loading saved results...
+                    {editingMessageId === message.id ? (
+                      <div className="space-y-3">
+                        <Textarea
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          className="min-h-[80px] border-gray-200 dark:border-gray-600 rounded-xl"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleSaveEdit(message.id)}
+                            size="sm"
+                            disabled={!editingText.trim()}
+                            className="rounded-full"
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            onClick={handleCancelEdit}
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
                     ) : (
-                      renderLibraryItems(savedItems)
+                      <div className="text-gray-900 dark:text-gray-100">
+                        {message.parts.find((p) => p.type === "text")?.text}
+                      </div>
                     )}
-                  </div>
-                </div>
-              ) : savedItems.length > 0 ? (
-                <div className="space-y-4">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    These items are saved locally on this device.
-                  </p>
-                  <div className="max-h-72 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/40">
-                    {renderLibraryItems(savedItems)}
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/40 p-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                  You haven&apos;t saved any results yet. Save a response to
-                  start building your library.
+                /* Assistant Message */
+                <div className="mb-6 sm:mb-8 group px-3 sm:px-0">
+                  {editingMessageId === message.id ? null : (
+                    <div className="space-y-5">
+                      {(() => {
+                        // Group consecutive reasoning steps together
+                        // Note: This runs on every render, but it's a simple grouping operation
+                        // The real performance fix is in removing expensive operations during input-available state
+                        const groupedParts = groupMessageParts(message.parts);
+
+                        // Count reasoning steps and tool calls
+                        const reasoningSteps = groupedParts.filter(g => g.type === "reasoning-group").length;
+                        const toolCalls = groupedParts.filter(g => g.type !== "reasoning-group" && g.part?.type?.startsWith("tool-")).length;
+                        const totalActions = reasoningSteps + toolCalls;
+
+                        // Calculate duration (if available in message metadata)
+                        const hasTextOutput = groupedParts.some(g => g.part?.type === "text");
+                        // A message is complete if it has text output AND either:
+                        // 1. It's not the last message, OR
+                        // 2. It's the last message and we're not currently loading
+                        const isLastMessage = realIndex === messages.length - 1;
+                        const messageIsComplete = hasTextOutput && (!isLastMessage || !isLoading);
+
+                        // Show header if there's any reasoning/tool activity (not just text)
+                        const hasActivity = groupedParts.some(g =>
+                          g.type === "reasoning-group" || g.part?.type?.startsWith("tool-")
+                        );
+
+                        // Get the latest step info for display
+                        const latestStep = groupedParts[groupedParts.length - 1];
+                        let latestStepTitle = "";
+                        let latestStepSubtitle = "";
+                        let latestStepIcon = <Brain className="h-5 w-5" />;
+
+                        if (latestStep) {
+                          if (latestStep.type === "reasoning-group") {
+                            // Get reasoning text - handle both single and multiple parts
+                            const allText = latestStep.parts
+                              .map((item: any) => item.part?.text || "")
+                              .join("\n\n");
+                            const lines = allText.split('\n').filter((l: string) => l.trim());
+
+                            // Try to find a title (line with **)
+                            const titleLine = lines.find((l: string) => l.match(/^\*\*.*\*\*$/));
+                            if (titleLine) {
+                              latestStepTitle = titleLine.replace(/\*\*/g, '').trim();
+                              // Get lines after title as preview
+                              const titleIndex = lines.indexOf(titleLine);
+                              if (titleIndex >= 0 && titleIndex < lines.length - 1) {
+                                latestStepSubtitle = lines
+                                  .slice(titleIndex + 1, titleIndex + 3)
+                                  .map((l: string) => l.trim())
+                                  .filter((l: string) => !l.match(/^\*\*.*\*\*$/))
+                                  .join(' ');
+                              }
+                            } else if (lines.length > 0) {
+                              // No title found, use first line as title and next as subtitle
+                              latestStepTitle = lines[0].trim();
+                              if (lines.length > 1) {
+                                latestStepSubtitle = lines.slice(1, 3).map((l: string) => l.trim()).join(' ');
+                              }
+                            } else {
+                              latestStepTitle = "Thinking...";
+                            }
+                            latestStepIcon = <Brain className="h-5 w-5 text-purple-500" />;
+                          } else if (latestStep.part?.type?.startsWith("tool-")) {
+                            // Get tool name and details
+                            const toolType = latestStep.part.type.replace("tool-", "");
+
+                            if (toolType === "patentSearch") {
+                              latestStepTitle = "Patent Search";
+                              latestStepSubtitle = latestStep.part.input?.query || "...";
+                              latestStepIcon = <Search className="h-5 w-5 text-blue-600" />;
+                            } else if (toolType === "clinicalTrialsSearch") {
+                              latestStepTitle = "Clinical Trials";
+                              latestStepSubtitle = latestStep.part.input?.query || "...";
+                              latestStepIcon = <Search className="h-5 w-5 text-blue-500" />;
+                            } else if (toolType === "drugInformationSearch") {
+                              latestStepTitle = "Drug Information";
+                              latestStepSubtitle = latestStep.part.input?.query || "...";
+                              latestStepIcon = <Search className="h-5 w-5 text-purple-500" />;
+                            } else if (toolType === "biomedicalLiteratureSearch") {
+                              latestStepTitle = "Literature Search";
+                              latestStepSubtitle = latestStep.part.input?.query || "...";
+                              latestStepIcon = <BookOpen className="h-5 w-5 text-indigo-500" />;
+                            } else if (toolType === "webSearch") {
+                              latestStepTitle = "Web Search";
+                              latestStepSubtitle = latestStep.part.input?.query || "...";
+                              latestStepIcon = <Globe className="h-5 w-5 text-green-500" />;
+                            } else if (toolType === "codeExecution") {
+                              latestStepTitle = "Code Execution";
+                              latestStepSubtitle = latestStep.part.input?.description || "Running Python code";
+                              latestStepIcon = <Code2 className="h-5 w-5 text-orange-500" />;
+                            } else if (toolType === "createChart") {
+                              latestStepTitle = "Creating Chart";
+                              latestStepSubtitle = latestStep.part.output?.title || "Generating visualization";
+                              latestStepIcon = <BarChart3 className="h-5 w-5 text-cyan-500" />;
+                            } else if (toolType === "createCSV") {
+                              latestStepTitle = "Creating Table";
+                              latestStepSubtitle = latestStep.part.output?.title || "Generating CSV data";
+                              latestStepIcon = <Table className="h-5 w-5 text-teal-500" />;
+                            } else {
+                              latestStepTitle = toolType;
+                              latestStepSubtitle = "";
+                            }
+                          }
+                        }
+
+                        // Filter to show only the latest step when trace is collapsed
+                        // When collapsed: hide ALL reasoning/tool steps, only show text output
+                        // When expanded: show all steps
+                        const displayParts = isTraceExpanded
+                          ? groupedParts
+                          : groupedParts.filter(g => {
+                              // Only show text parts when collapsed
+                              if (g.type === "reasoning-group") return false;
+                              if (g.part?.type?.startsWith("tool-")) return false;
+                              return g.part?.type === "text";
+                            });
+
+                        return (
+                          <>
+                            {/* Trace Header - Show when there's any reasoning/tool activity */}
+                            {hasActivity && (
+                              <button
+                                onClick={() => setIsTraceExpanded(!isTraceExpanded)}
+                                className="w-full flex items-start gap-4 px-4 py-4 bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-900/30 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all mb-4 text-left group"
+                              >
+                                {/* Icon */}
+                                <div className="flex-shrink-0 mt-0.5">
+                                  {messageIsComplete ? (
+                                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center">
+                                      <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-lg bg-blue-500/10 dark:bg-blue-500/20 flex items-center justify-center">
+                                      {latestStepIcon}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Content */}
+                                <div className="flex-1 min-w-0">
+                                  {messageIsComplete ? (
+                                    <>
+                                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                                        Completed
+                                      </div>
+                                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                                        Performed {totalActions} {totalActions === 1 ? 'action' : 'actions'}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                          {latestStepTitle || "Working..."}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse" />
+                                          <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                                          <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                                        </div>
+                                      </div>
+                                      {latestStepSubtitle && (
+                                        <div className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                                          {latestStepSubtitle}
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+
+                                {/* Expand button */}
+                                <div className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors mt-1">
+                                  <span className="hidden sm:inline">
+                                    {isTraceExpanded ? 'Hide' : 'Show'}
+                                  </span>
+                                  <ChevronDown className={`h-4 w-4 transition-transform ${isTraceExpanded ? 'rotate-180' : ''}`} />
+                                </div>
+                              </button>
+                            )}
+
+                            {displayParts.map((group, groupIndex) => {
+                          if (group.type === "reasoning-group") {
+                            // Render combined reasoning component
+                            const combinedText = group.parts
+                              .map((item: any) => item.part.text)
+                              .join("\n\n");
+                            const firstPart = group.parts[0].part;
+                            // Only show as streaming if THIS specific part is actively streaming
+                            const isStreaming = group.parts.some(
+                              (item: any) => item.part.state === "streaming"
+                            );
+
+                            // Extract latest **title** and lines after it for live preview
+                            let previewTitle = "";
+                            let previewLines: string[] = [];
+
+                            if (isStreaming && combinedText) {
+                              const allLines = combinedText.split('\n').filter((l: string) => l.trim());
+
+                              // Find the LATEST line that matches **text** pattern
+                              let lastTitleIndex = -1;
+                              for (let i = allLines.length - 1; i >= 0; i--) {
+                                if (allLines[i].match(/^\*\*.*\*\*$/)) {
+                                  lastTitleIndex = i;
+                                  previewTitle = allLines[i].replace(/\*\*/g, ''); // Remove ** markers
+                                  break;
+                                }
+                              }
+
+                              // Get all lines after the latest title
+                              if (lastTitleIndex !== -1 && lastTitleIndex < allLines.length - 1) {
+                                previewLines = allLines.slice(lastTitleIndex + 1);
+                              } else if (lastTitleIndex === -1 && allLines.length > 0) {
+                                // No title found, just use all lines
+                                previewLines = allLines;
+                              }
+                            }
+
+                            return (
+                              <React.Fragment key={`reasoning-group-${groupIndex}`}>
+                                <ReasoningComponent
+                                  part={{ ...firstPart, text: combinedText }}
+                                  messageId={message.id}
+                                  index={groupIndex}
+                                  status={isStreaming ? "streaming" : "complete"}
+                                  expandedTools={expandedTools}
+                                  toggleToolExpansion={toggleToolExpansion}
+                                />
+                                {isStreaming && previewLines.length > 0 && (
+                                  <LiveReasoningPreview
+                                    title={previewTitle}
+                                    lines={previewLines}
+                                  />
+                                )}
+                              </React.Fragment>
+                            );
+                          } else {
+                            // Render single part normally
+                            const { part, index } = group;
+
+                            switch (part.type) {
+                              // Skip step-start markers (metadata from AI SDK)
+                              case "step-start":
+                                return null;
+
+                              // Text parts
+                              case "text":
+                                // Use index directly instead of findIndex to avoid extra computation
+                                return (
+                                  <div
+                                    key={index}
+                                    className="prose prose-sm max-w-none dark:prose-invert"
+                                  >
+                                    <MemoizedTextPartWithCitations
+                                      text={part.text}
+                                      messageParts={message.parts}
+                                      currentPartIndex={index}
+                                      allMessages={deferredMessages}
+                                      currentMessageIndex={realIndex}
+                                    />
+                                  </div>
+                                );
+
+                              // Skip individual reasoning parts as they're handled in groups
+                              case "reasoning":
+                                return null;
+
+                              // Python Executor Tool
+                              case "tool-codeExecution": {
+                                const callId = part.toolCallId;
+                                const isStreaming = part.state === "input-streaming" || part.state === "input-available";
+                                const hasOutput = part.state === "output-available";
+                                const hasError = part.state === "output-error";
+
+                                if (hasError) {
+                                  return (
+                                    <div key={callId}>
+                                      <TimelineStep
+                                        part={part}
+                                        messageId={message.id}
+                                        index={index}
+                                        status="error"
+                                        type="tool"
+                                        title="Python Execution Error"
+                                        subtitle={part.errorText}
+                                        icon={<AlertCircle />}
+                                        expandedTools={expandedTools}
+                                        toggleToolExpansion={toggleToolExpansion}
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                const description = part.input?.description || "Executed Python code";
+
+                                return (
+                                  <div key={callId}>
+                                    <TimelineStep
+                                      part={part}
+                                      messageId={message.id}
+                                      index={index}
+                                      status={isStreaming ? "streaming" : "complete"}
+                                      type="tool"
+                                      title="Code & Output"
+                                      subtitle={description}
+                                      icon={<Code2 />}
+                                      expandedTools={expandedTools}
+                                      toggleToolExpansion={toggleToolExpansion}
+                                    >
+                                      {hasOutput && (
+                                        <MemoizedCodeExecutionResult
+                                          code={part.input?.code || ""}
+                                          output={part.output}
+                                          actionId={callId}
+                                          expandedTools={expandedTools}
+                                          toggleToolExpansion={toggleToolExpansion}
+                                        />
+                                      )}
+                                    </TimelineStep>
+                                  </div>
+                                );
+                              }
+
+                              // Clinical Trials Search Tool
+                              case "tool-clinicalTrialsSearch": {
+                                const callId = part.toolCallId;
+                                const isStreaming = part.state === "input-streaming" || part.state === "input-available";
+                                const hasResults = part.state === "output-available";
+                                const hasError = part.state === "output-error";
+
+                                if (hasError) {
+                                  return (
+                                    <div key={callId} className="my-1">
+                                      <TimelineStep
+                                        part={part}
+                                        messageId={message.id}
+                                        index={index}
+                                        status="error"
+                                        type="search"
+                                        title="Clinical Trials Search Error"
+                                        subtitle={part.errorText}
+                                        icon={<AlertCircle />}
+                                        expandedTools={expandedTools}
+                                        toggleToolExpansion={toggleToolExpansion}
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                const trialsResults = hasResults ? extractSearchResults(part.output) : [];
+                                const query = part.input?.query || "";
+
+                                // Parse output to get favicon
+                                let faviconUrl = 'https://clinicaltrials.gov/favicon.ico';
+                                try {
+                                  const data = JSON.parse(part.output || '{}');
+                                  if (data.favicon) faviconUrl = data.favicon;
+                                } catch (e) {}
+
+                                // Create single favicon subtitle when complete
+                                let subtitleContent: React.ReactNode = query;
+                                if (!isStreaming && trialsResults.length > 0) {
+                                  subtitleContent = (
+                                    <div className="flex flex-col gap-1">
+                                      <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 flex items-center justify-center overflow-hidden">
+                                          <Favicon url={faviconUrl} size={12} className="w-3 h-3" />
+                                        </div>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                                          {trialsResults.length} results
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div key={callId}>
+                                    <div className="group relative py-0.5 animate-in fade-in duration-200">
+                                      <div
+                                        className={`relative flex items-start gap-4 py-4 px-4 -mx-2 rounded-md transition-all duration-150 ${
+                                          isStreaming ? 'bg-blue-50/50 dark:bg-blue-950/10' : ''
+                                        } ${
+                                          hasResults ? 'hover:bg-gray-50 dark:hover:bg-white/[0.02] cursor-pointer' : ''
+                                        }`}
+                                        onClick={hasResults ? () => toggleToolExpansion(`step-search-${message.id}-${index}`) : undefined}
+                                      >
+                                        {/* Status indicator */}
+                                        <div className="flex-shrink-0">
+                                          {!isStreaming ? (
+                                            <div className="w-4 h-4 rounded-full bg-emerald-500/15 dark:bg-emerald-500/25 flex items-center justify-center">
+                                              <Check className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-500 stroke-[2.5]" />
+                                            </div>
+                                          ) : (
+                                            <div className="relative w-4 h-4">
+                                              <div className="absolute inset-0 rounded-full border border-blue-300/40 dark:border-blue-700/40" />
+                                              <div className="absolute inset-0 rounded-full border border-transparent border-t-blue-500 dark:border-t-blue-400 animate-spin" />
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {/* Icon */}
+                                        <div className={`flex-shrink-0 w-4 h-4 ${
+                                          isStreaming ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'
+                                        }`}>
+                                          <Search />
+                                        </div>
+
+                                        {/* Content */}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-baseline gap-2 mb-1">
+                                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                              Clinical Trials Search
+                                            </span>
+                                          </div>
+                                          {!isStreaming && trialsResults.length > 0 && subtitleContent}
+                                          {isStreaming && <div className="text-xs text-gray-500 dark:text-gray-500 line-clamp-1 mt-0.5">{query}</div>}
+                                        </div>
+
+                                        {/* Chevron */}
+                                        {hasResults && !isStreaming && (
+                                          <ChevronDown className={`h-3.5 w-3.5 text-gray-400 dark:text-gray-600 flex-shrink-0 transition-transform duration-150 ${
+                                            expandedTools.has(`step-search-${message.id}-${index}`) ? 'rotate-180' : ''
+                                          }`} />
+                                        )}
+                                      </div>
+
+                                      {/* Expanded content */}
+                                      {expandedTools.has(`step-search-${message.id}-${index}`) && hasResults && (
+                                        <div className="mt-1.5 ml-6 mr-2 animate-in fade-in duration-150">
+                                          <SearchResultsCarousel
+                                            results={trialsResults}
+                                            type="clinical"
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              // Web Search Tool
+                              case "tool-webSearch": {
+                                const callId = part.toolCallId;
+                                const isStreaming = part.state === "input-streaming" || part.state === "input-available";
+                                const hasResults = part.state === "output-available";
+                                const hasError = part.state === "output-error";
+
+                                if (hasError) {
+                                  return (
+                                    <div key={callId} className="my-1">
+                                      <TimelineStep
+                                        part={part}
+                                        messageId={message.id}
+                                        index={index}
+                                        status="error"
+                                        type="search"
+                                        title="Web Search Error"
+                                        subtitle={part.errorText}
+                                        icon={<AlertCircle />}
+                                        expandedTools={expandedTools}
+                                        toggleToolExpansion={toggleToolExpansion}
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                const webResults = hasResults ? extractSearchResults(part.output) : [];
+                                const query = part.input?.query || "";
+
+                                // Create favicon stack subtitle when complete
+                                let subtitleContent: React.ReactNode = query;
+                                if (!isStreaming && webResults.length > 0) {
+                                  const displayResults = webResults.slice(0, 5);
+                                  subtitleContent = (
+                                    <div className="flex flex-col gap-1">
+                                      <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex -space-x-2">
+                                          {displayResults.map((result: any, idx: number) => (
+                                            <div
+                                              key={idx}
+                                              className="w-5 h-5 rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 flex items-center justify-center overflow-hidden"
+                                              style={{ zIndex: 5 - idx }}
+                                            >
+                                              <Favicon url={result.url} size={12} className="w-3 h-3" />
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                                          {webResults.length} results
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div key={callId}>
+                                    <TimelineStep
+                                      part={part}
+                                      messageId={message.id}
+                                      index={index}
+                                      status={isStreaming ? "streaming" : "complete"}
+                                      type="search"
+                                      title="Web Search"
+                                      subtitle={subtitleContent}
+                                      icon={<Globe />}
+                                      expandedTools={expandedTools}
+                                      toggleToolExpansion={toggleToolExpansion}
+                                    >
+                                      {hasResults && webResults.length > 0 && (
+                                        <SearchResultsCarousel
+                                          results={webResults}
+                                          type="web"
+                                        />
+                                      )}
+                                    </TimelineStep>
+                                  </div>
+                                );
+                              }
+
+                              // Patent Search Tool
+                              case "tool-patentSearch": {
+                                const callId = part.toolCallId;
+                                const isStreaming = part.state === "input-streaming" || part.state === "input-available";
+                                const hasResults = part.state === "output-available";
+                                const hasError = part.state === "output-error";
+
+                                if (hasError) {
+                                  return (
+                                    <div key={callId} className="my-1">
+                                      <TimelineStep
+                                        part={part}
+                                        messageId={message.id}
+                                        index={index}
+                                        status="error"
+                                        type="search"
+                                        title="Patent Search Error"
+                                        subtitle={part.errorText}
+                                        icon={<AlertCircle />}
+                                        expandedTools={expandedTools}
+                                        toggleToolExpansion={toggleToolExpansion}
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                const patentResults = hasResults ? extractSearchResults(part.output) : [];
+                                const query = part.input?.query || "";
+
+                                // Create USPTO logo stack subtitle when complete
+                                let subtitleContent: React.ReactNode = query;
+                                if (!isStreaming) {
+                                  if (patentResults.length > 0) {
+                                    const displayResults = patentResults.slice(0, 5);
+                                    subtitleContent = (
+                                      <div className="flex flex-col gap-1">
+                                        <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex -space-x-2">
+                                            {displayResults.map((result: any, idx: number) => (
+                                              <div
+                                                key={idx}
+                                                className="w-5 h-5 rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 flex items-center justify-center overflow-hidden p-0.5"
+                                                style={{ zIndex: 5 - idx }}
+                                              >
+                                                <img
+                                                  src="/assets/banner/uspto.png"
+                                                  alt="USPTO"
+                                                  className="w-full h-full object-contain"
+                                                />
+                                              </div>
+                                            ))}
+                                          </div>
+                                          <span className="text-xs text-gray-600 dark:text-gray-400">
+                                            {patentResults.length} results
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  } else {
+                                    // Show 0 results when complete but no results found
+                                    subtitleContent = (
+                                      <div className="flex flex-col gap-1">
+                                        <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-500">0 results</div>
+                                      </div>
+                                    );
+                                  }
+                                }
+
+                                return (
+                                  <div key={callId}>
+                                    <TimelineStep
+                                      part={part}
+                                      messageId={message.id}
+                                      index={index}
+                                      status={isStreaming ? "streaming" : "complete"}
+                                      type="search"
+                                      title="Patent Search"
+                                      subtitle={subtitleContent}
+                                      icon={<Search />}
+                                      expandedTools={expandedTools}
+                                      toggleToolExpansion={toggleToolExpansion}
+                                    >
+                                      {hasResults && patentResults.length > 0 && (
+                                        <SearchResultsCarousel
+                                          results={patentResults}
+                                          type="patent"
+                                        />
+                                      )}
+                                    </TimelineStep>
+                                  </div>
+                                );
+                              }
+
+                              // Biomedical Literature Search Tool
+                              case "tool-biomedicalLiteratureSearch": {
+                                const callId = part.toolCallId;
+                                const isStreaming = part.state === "input-streaming" || part.state === "input-available";
+                                const hasResults = part.state === "output-available";
+                                const hasError = part.state === "output-error";
+
+                                if (hasError) {
+                                  return (
+                                    <div key={callId} className="my-1">
+                                      <TimelineStep
+                                        part={part}
+                                        messageId={message.id}
+                                        index={index}
+                                        status="error"
+                                        type="search"
+                                        title="Literature Search Error"
+                                        subtitle={part.errorText}
+                                        icon={<AlertCircle />}
+                                        expandedTools={expandedTools}
+                                        toggleToolExpansion={toggleToolExpansion}
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                const literatureResults = hasResults ? extractSearchResults(part.output) : [];
+                                const query = part.input?.query || "";
+
+                                // Create favicon stack subtitle when complete (like web search)
+                                let subtitleContent: React.ReactNode = query;
+                                if (!isStreaming && literatureResults.length > 0) {
+                                  const displayResults = literatureResults.slice(0, 5);
+                                  subtitleContent = (
+                                    <div className="flex flex-col gap-1">
+                                      <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex -space-x-2">
+                                          {displayResults.map((result: any, idx: number) => (
+                                            <div
+                                              key={idx}
+                                              className="w-5 h-5 rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 flex items-center justify-center overflow-hidden"
+                                              style={{ zIndex: 5 - idx }}
+                                            >
+                                              <Favicon url={result.url} size={12} className="w-3 h-3" />
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                                          {literatureResults.length} results
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div key={callId}>
+                                    <TimelineStep
+                                      part={part}
+                                      messageId={message.id}
+                                      index={index}
+                                      status={isStreaming ? "streaming" : "complete"}
+                                      type="search"
+                                      title="Literature Search"
+                                      subtitle={subtitleContent}
+                                      icon={<BookOpen />}
+                                      expandedTools={expandedTools}
+                                      toggleToolExpansion={toggleToolExpansion}
+                                    >
+                                      {hasResults && literatureResults.length > 0 && (
+                                        <SearchResultsCarousel
+                                          results={literatureResults}
+                                          type="literature"
+                                        />
+                                      )}
+                                    </TimelineStep>
+                                  </div>
+                                );
+                              }
+
+                              // Drug Information Search Tool
+                              case "tool-drugInformationSearch": {
+                                const callId = part.toolCallId;
+                                const isStreaming = part.state === "input-streaming" || part.state === "input-available";
+                                const hasResults = part.state === "output-available";
+                                const hasError = part.state === "output-error";
+
+                                if (hasError) {
+                                  return (
+                                    <div key={callId} className="my-1">
+                                      <TimelineStep
+                                        part={part}
+                                        messageId={message.id}
+                                        index={index}
+                                        status="error"
+                                        type="search"
+                                        title="Drug Information Search Error"
+                                        subtitle={part.errorText}
+                                        icon={<AlertCircle />}
+                                        expandedTools={expandedTools}
+                                        toggleToolExpansion={toggleToolExpansion}
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                const drugResults = hasResults ? extractSearchResults(part.output) : [];
+                                const query = part.input?.query || "";
+
+                                // Parse output to get favicon
+                                let faviconUrl = 'https://dailymed.nlm.nih.gov/dailymed/image/NLM-logo.png';
+                                try {
+                                  const data = JSON.parse(part.output || '{}');
+                                  if (data.favicon) faviconUrl = data.favicon;
+                                } catch (e) {}
+
+                                // Create single favicon subtitle when complete
+                                let subtitleContent: React.ReactNode = query;
+                                if (!isStreaming && drugResults.length > 0) {
+                                  subtitleContent = (
+                                    <div className="flex flex-col gap-1">
+                                      <div className="text-xs text-gray-600 dark:text-gray-400">{query}</div>
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 flex items-center justify-center overflow-hidden">
+                                          <Favicon url={faviconUrl} size={12} className="w-3 h-3" />
+                                        </div>
+                                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                                          {drugResults.length} results
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div key={callId}>
+                                    <TimelineStep
+                                      part={part}
+                                      messageId={message.id}
+                                      index={index}
+                                      status={isStreaming ? "streaming" : "complete"}
+                                      type="search"
+                                      title="Drug Information"
+                                      subtitle={subtitleContent}
+                                      icon={<Search />}
+                                      expandedTools={expandedTools}
+                                      toggleToolExpansion={toggleToolExpansion}
+                                    >
+                                      {hasResults && drugResults.length > 0 && (
+                                        <SearchResultsCarousel
+                                          results={drugResults}
+                                          type="drug"
+                                        />
+                                      )}
+                                    </TimelineStep>
+                                  </div>
+                                );
+                              }
+
+                              // Chart Creation Tool
+                              case "tool-createChart": {
+                                const callId = part.toolCallId;
+                                const isStreaming = part.state === "input-streaming" || part.state === "input-available";
+                                const hasOutput = part.state === "output-available";
+                                const hasError = part.state === "output-error";
+
+                                if (hasError) {
+                                  return (
+                                    <div key={callId}>
+                                      <TimelineStep
+                                        part={part}
+                                        messageId={message.id}
+                                        index={index}
+                                        status="error"
+                                        type="tool"
+                                        title="Chart Creation Error"
+                                        subtitle={part.errorText}
+                                        icon={<AlertCircle />}
+                                        expandedTools={expandedTools}
+                                        toggleToolExpansion={toggleToolExpansion}
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                const title = hasOutput && part.output?.title ? part.output.title : "Chart";
+
+                                return (
+                                  <div key={callId}>
+                                    <TimelineStep
+                                      part={part}
+                                      messageId={message.id}
+                                      index={index}
+                                      status={isStreaming ? "streaming" : "complete"}
+                                      type="tool"
+                                      title={title}
+                                      subtitle={hasOutput && part.output?.metadata ? `${part.output.metadata.totalSeries} series · ${part.output.metadata.totalDataPoints} points` : undefined}
+                                      icon={<BarChart3 />}
+                                      expandedTools={expandedTools}
+                                      toggleToolExpansion={toggleToolExpansion}
+                                    >
+                                      {hasOutput && (
+                                        <MemoizedChartResult
+                                          chartData={part.output}
+                                          actionId={callId}
+                                          expandedTools={expandedTools}
+                                          toggleToolExpansion={toggleToolExpansion}
+                                        />
+                                      )}
+                                    </TimelineStep>
+                                  </div>
+                                );
+                              }
+
+                              // CSV Creation Tool
+                              case "tool-createCSV": {
+                                const callId = part.toolCallId;
+                                const isStreaming = part.state === "input-streaming" || part.state === "input-available";
+                                const hasOutput = part.state === "output-available";
+                                const hasError = part.state === "output-error" || part.output?.error;
+
+                                if (hasError) {
+                                  return (
+                                    <div key={callId}>
+                                      <TimelineStep
+                                        part={part}
+                                        messageId={message.id}
+                                        index={index}
+                                        status="error"
+                                        type="tool"
+                                        title="CSV Creation Error"
+                                        subtitle={part.output?.message || part.errorText}
+                                        icon={<AlertCircle />}
+                                        expandedTools={expandedTools}
+                                        toggleToolExpansion={toggleToolExpansion}
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                const title = hasOutput && part.output?.title ? part.output.title : "CSV Table";
+                                const subtitle = hasOutput ? `${part.output.rowCount} rows · ${part.output.columnCount} columns` : undefined;
+
+                                return (
+                                  <div key={callId}>
+                                    <TimelineStep
+                                      part={part}
+                                      messageId={message.id}
+                                      index={index}
+                                      status={isStreaming ? "streaming" : "complete"}
+                                      type="tool"
+                                      title={title}
+                                      subtitle={subtitle}
+                                      icon={<Table />}
+                                      expandedTools={expandedTools}
+                                      toggleToolExpansion={toggleToolExpansion}
+                                    >
+                                      {hasOutput && !part.output?.error && (
+                                        <CSVPreview {...part.output} />
+                                      )}
+                                    </TimelineStep>
+                                  </div>
+                                );
+                              }
+
+                              // Generic dynamic tool fallback (for future tools)
+                              case "dynamic-tool":
+                                return (
+                                  <div
+                                    key={index}
+                                    className="mt-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded p-2 sm:p-3"
+                                  >
+                                    <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 mb-2">
+                                      <Wrench className="h-4 w-4" />
+                                      <span className="font-medium">
+                                        Tool: {part.toolName}
+                                      </span>
+                                    </div>
+                                    <div className="text-sm text-purple-600 dark:text-purple-300">
+                                      {part.state === "input-streaming" && (
+                                        <pre className="bg-purple-100 dark:bg-purple-800/30 p-2 rounded text-xs">
+                                          {JSON.stringify(part.input, null, 2)}
+                                        </pre>
+                                      )}
+                                      {part.state === "output-available" && (
+                                        <pre className="bg-purple-100 dark:bg-purple-800/30 p-2 rounded text-xs">
+                                          {JSON.stringify(part.output, null, 2)}
+                                        </pre>
+                                      )}
+                                      {part.state === "output-error" && (
+                                        <div className="text-red-600 dark:text-red-300">
+                                          Error: {part.errorText}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+
+                              default:
+                                return null;
+                            }
+                          }
+                        })}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Message Actions - Professional Action Bar */}
+                  {message.role === "assistant" && !isLoading && (
+                    <div className="flex justify-end gap-2 mt-6 pt-4 mb-8 border-t border-gray-100 dark:border-gray-800">
+                      <button
+                        onClick={() => copyToClipboard(getMessageText(message))}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-all"
+                        title="Copy to clipboard"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>Copy</span>
+                      </button>
+
+                      {/* Show download button only for last message when session exists */}
+                      {deferredMessages[deferredMessages.length - 1]?.id === message.id &&
+                       sessionIdRef.current && (
+                        subscription.canDownloadReports ? (
+                          <button
+                            onClick={handleDownloadPDF}
+                            disabled={isDownloadingPDF}
+                            className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Download full report as PDF"
+                          >
+                            {isDownloadingPDF ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <span>Generating...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Download className="h-3.5 w-3.5" />
+                                <span>Download Report</span>
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setShowAuthModal(true)}
+                            className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg transition-all hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-600 dark:hover:text-gray-400 group"
+                            title="Sign in to download reports"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            <span>Download Report</span>
+                            <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors">
+                              Sign in
+                            </span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
-            </DialogContent>
-          </Dialog>
-        </SeenResultsProvider>
-      </SavedResultsProvider>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        {virtualizationEnabled && (
+          <>
+            <div
+              style={{ height: Math.max(0, visibleRange.start * avgRowHeight) }}
+            />
+            <div
+              style={{
+                height: Math.max(
+                  0,
+                  (deferredMessages.length - visibleRange.end) * avgRowHeight
+                ),
+              }}
+            />
+          </>
+        )}
 
-      {/* Auth Modal for Library access */}
-      <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
-    </>
+        {/* Coffee Loading Message */}
+        <AnimatePresence>
+          {status === "submitted" &&
+            deferredMessages.length > 0 &&
+            deferredMessages[deferredMessages.length - 1]?.role === "user" && (
+              <motion.div
+                className="mb-6"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+              >
+                <div className="flex items-start gap-2">
+                  <div className="text-amber-600 dark:text-amber-400 text-lg mt-0.5">
+                    ☕
+                  </div>
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2 max-w-xs">
+                    <div className="text-amber-700 dark:text-amber-300 text-sm">
+                      Just grabbing a coffee and contemplating the meaning of
+                      life... ☕️
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+        </AnimatePresence>
+
+        <div ref={messagesEndRef} />
+        <div ref={bottomAnchorRef} className="h-px w-full" />
+      </div>
+
+      {/* Gradient fade above input form */}
+      <AnimatePresence>
+        {(isFormAtBottom || isMobile) && (
+          <>
+            <motion.div
+              className="fixed left-1/2 -translate-x-1/2 bottom-0 w-full max-w-3xl h-36 pointer-events-none z-45"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              <div
+                className="dark:hidden absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(to top, rgb(245,245,245) 0%, rgba(245,245,245,0.98) 30%, rgba(245,245,245,0.8) 60%, rgba(245,245,245,0) 100%)",
+                }}
+              />
+              <div
+                className="hidden dark:block absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(to top, rgb(3 7 18) 0%, rgb(3 7 18 / 0.98) 30%, rgb(3 7 18 / 0.8) 60%, transparent 100%)",
+                }}
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+      
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 sm:p-4">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <AlertCircle className="h-4 w-4" />
+            <span className="font-medium">
+              {error.message?.includes('PAYMENT_REQUIRED') ? 'Payment Setup Required' : 'Something went wrong'}
+            </span>
+          </div>
+          <p className="text-red-600 dark:text-red-400 text-sm mt-1">
+            {error.message?.includes('PAYMENT_REQUIRED') 
+              ? 'You need to set up a payment method to use the pay-per-use plan. You only pay for what you use.'
+              : 'Please check your API keys and try again.'
+            }
+          </p>
+          <Button
+            onClick={() => {
+              if (error.message?.includes('PAYMENT_REQUIRED')) {
+                // Redirect to subscription setup
+                const url = `/api/checkout?plan=pay_per_use&redirect=${encodeURIComponent(window.location.href)}`;
+                window.location.href = url;
+              } else {
+                window.location.reload();
+              }
+            }}
+            variant="outline"
+            size="sm"
+            className="mt-2 text-red-700 border-red-300 hover:bg-red-100 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
+          >
+            {error.message?.includes('PAYMENT_REQUIRED') ? (
+              <>
+                <span className="mr-1">💳</span>
+                Setup Payment
+              </>
+            ) : (
+              <>
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Retry
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* Input Form at bottom */}
+      <AnimatePresence>
+        {(isFormAtBottom || isMobile) && (
+          <motion.div
+            className="fixed left-1/2 -translate-x-1/2 bottom-0 w-full max-w-3xl px-3 sm:px-6 pt-4 pb-5 sm:pb-6 z-50"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          >
+            {/* Metrics Pills - connected to input box */}
+            {messages.length > 0 && (
+              <div className="mb-2">
+                <MetricsPills metrics={cumulativeMetrics} />
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 px-4 py-2.5 relative flex items-center">
+                <Textarea
+                  value={input}
+                  onChange={handleInputChange}
+                  placeholder="Ask a question..."
+                  className="w-full resize-none border-0 px-0 py-2 pr-12 min-h-[36px] max-h-24 focus:ring-0 focus-visible:ring-0 bg-transparent overflow-y-auto text-base placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-none"
+                  disabled={status === "error" || isLoading}
+                  rows={1}
+                  style={{ lineHeight: "1.5", paddingTop: "0.5rem", paddingBottom: "0.5rem" }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }
+                  }}
+                />
+                <Button
+                  type={canStop ? "button" : "submit"}
+                  onClick={canStop ? handleStop : undefined}
+                  disabled={
+                    !canStop &&
+                    (isLoading || !input.trim() || status === "error")
+                  }
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl h-8 w-8 p-0 bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-gray-200 dark:text-gray-900 shadow-sm transition-colors"
+                >
+                    {canStop ? (
+                      <Square className="h-4 w-4" />
+                    ) : isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 12l14 0m-7-7l7 7-7 7"
+                        />
+                      </svg>
+                    )}
+                  </Button>
+                </div>
+              </form>
+
+            {/* Mobile Bottom Bar - Social links and disclaimer below input */}
+            <motion.div 
+              className="block sm:hidden mt-4 pt-3 border-t border-gray-200 dark:border-gray-700"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5, duration: 0.3 }}
+            >
+              <div className="flex flex-col items-center space-y-3">
+                <div className="flex items-center justify-center space-x-4">
+                  <SocialLinks />
+                </div>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center">
+                  Not financial advice.
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Rate Limit Banner */}
+      <RateLimitBanner />
+
+      {/* Auth Modal for Paywalls */}
+      <AuthModal
+        open={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+      />
+
+      {/* Signup Prompt Dialog for non-authenticated users */}
+      <Dialog open={showSignupPrompt} onOpenChange={setShowSignupPrompt}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Sign up to save your chat
+            </DialogTitle>
+            <DialogDescription className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              Create a free account to save your chat history and access it anytime.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-6">
+            <button
+              onClick={() => {
+                setShowSignupPrompt(false);
+                setShowAuthModal(true);
+              }}
+              className="w-full px-4 py-2.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 font-medium rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-all"
+            >
+              Sign up (free)
+            </button>
+            <button
+              onClick={(e) => {
+                setShowSignupPrompt(false);
+                // Submit with skip flag to bypass the signup prompt
+                handleSubmit(e as any, true);
+              }}
+              className="w-full px-4 py-2.5 bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+            >
+              Continue without account
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Model Compatibility Dialog */}
+      <ModelCompatibilityDialog
+        open={!!modelCompatibilityError}
+        onClose={() => {
+          setModelCompatibilityError(null);
+          setPendingMessage(null);
+        }}
+        onContinue={() => {
+          // TODO: Implement retry without tools
+          setModelCompatibilityError(null);
+          setPendingMessage(null);
+        }}
+        error={modelCompatibilityError?.message || ''}
+        modelName={selectedModel || undefined}
+      />
+    </div>
   );
 }

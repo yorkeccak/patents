@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 import { ExternalLink, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import { Favicon } from "@/components/favicon";
 
 // Container for citation text and card
 export const InlineCitation = React.forwardRef<
@@ -64,26 +65,48 @@ export const InlineCitationCardTrigger = React.forwardRef<
   const firstSource = sources.length > 0 ? sources[0] : "";
   const hostname = React.useMemo(() => getHostname(firstSource), [firstSource, getHostname]);
   const count = sources.length > 1 ? ` +${sources.length - 1}` : "";
-  
+
   // Check if it's a special source that needs a logo
-  const isValyu = React.useMemo(() => 
-    hostname.includes('valyu') || hostname.includes('deepfinance'),
+  const isValyu = React.useMemo(() =>
+    hostname.includes('valyu') || hostname.includes('biomed'),
     [hostname]
   );
-  const isWiley = React.useMemo(() => 
-    hostname.includes('wiley') || 
+  const isWiley = React.useMemo(() =>
+    hostname.includes('wiley') ||
     hostname.includes('onlinelibrary.wiley') ||
     firstSource.includes('isbn'),
     [hostname, firstSource]
   );
+  const isPatent = React.useMemo(() =>
+    hostname.includes('uspto') ||
+    hostname.includes('patent') ||
+    firstSource.includes('patent') ||
+    !firstSource || // Empty URL typically means patent data
+    firstSource === '',
+    [hostname, firstSource]
+  );
 
   const badgeContent = React.useMemo(() => {
+    if (isPatent) {
+      return (
+        <>
+          <img
+            src="/assets/banner/uspto.png"
+            alt="USPTO"
+            className="h-4 w-4 inline-block"
+            loading="eager"
+            decoding="async"
+          />
+          {count}
+        </>
+      );
+    }
     if (isValyu) {
       return (
         <>
-          <img 
-            src="/valyu.svg" 
-            alt="Valyu" 
+          <img
+            src="/valyu.svg"
+            alt="Valyu"
             className="h-6 w-6 inline-block"
             loading="eager"
             decoding="async"
@@ -95,9 +118,9 @@ export const InlineCitationCardTrigger = React.forwardRef<
     if (isWiley) {
       return (
         <>
-          <img 
-            src="/wy.svg" 
-            alt="Wiley" 
+          <img
+            src="/wy.svg"
+            alt="Wiley"
             className="h-6 w-6 inline-block opacity-80"
             loading="eager"
             decoding="async"
@@ -107,8 +130,18 @@ export const InlineCitationCardTrigger = React.forwardRef<
         </>
       );
     }
-    return <>{hostname}{count}</>;
-  }, [isValyu, isWiley, hostname, count]);
+    // For all other sources, show favicon with hostname
+    return (
+      <>
+        <Favicon
+          url={firstSource}
+          size={16}
+          className="w-3.5 h-3.5 inline-block"
+        />
+        <span className="ml-0.5">{hostname}{count}</span>
+      </>
+    );
+  }, [isPatent, isValyu, isWiley, hostname, count, firstSource]);
 
   return (
     <HoverCardPrimitive.Trigger asChild>
@@ -299,6 +332,47 @@ export const InlineCitationSource = React.forwardRef<
     }
   };
 
+  // Detect if this is a patent source
+  const hostname = url ? getHostname(url) : '';
+  const isPatent = !url || url === '' ||
+    hostname.includes('uspto') ||
+    hostname.includes('patent') ||
+    url.includes('patent');
+
+  const FaviconOrLogo = isPatent ? (
+    <img
+      src="/assets/banner/uspto.png"
+      alt="USPTO"
+      className="w-4 h-4 flex-shrink-0 mt-0.5 object-contain"
+      loading="eager"
+      decoding="async"
+    />
+  ) : (
+    <Favicon
+      url={url}
+      size={16}
+      className="w-4 h-4 flex-shrink-0 mt-0.5"
+    />
+  );
+
+  const SmallFaviconOrLogo = isPatent ? (
+    <img
+      src="/assets/banner/uspto.png"
+      alt="USPTO"
+      className="w-3 h-3 flex-shrink-0 object-contain"
+      loading="eager"
+      decoding="async"
+    />
+  ) : (
+    <Favicon
+      url={url}
+      size={12}
+      className="w-3 h-3 flex-shrink-0"
+    />
+  );
+
+  const displayHostname = isPatent ? 'USPTO' : hostname;
+
   return (
     <div
       ref={ref}
@@ -306,13 +380,16 @@ export const InlineCitationSource = React.forwardRef<
       {...props}
     >
       <div className="space-y-1">
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="text-xs font-medium leading-tight line-clamp-2 flex-1">
-            {title}
-          </h4>
-          <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2">
+          {FaviconOrLogo}
+          <div className="flex-1 flex items-start justify-between gap-2">
+            <h4 className="text-xs font-medium leading-tight line-clamp-2 flex-1">
+              {title}
+            </h4>
+            <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+          </div>
         </div>
-        
+
         {description && (
           <p className="text-[10px] text-muted-foreground line-clamp-2 leading-snug">
             {description}
@@ -321,7 +398,8 @@ export const InlineCitationSource = React.forwardRef<
       </div>
 
       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground flex-wrap">
-        <span className="truncate max-w-[100px]">{getHostname(url)}</span>
+        {SmallFaviconOrLogo}
+        <span className="truncate max-w-[100px]">{displayHostname}</span>
         {date && (
           <>
             <span>·</span>
@@ -349,15 +427,17 @@ export const InlineCitationSource = React.forwardRef<
         </div>
       )}
 
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
-      >
-        <ExternalLink className="h-3 w-3" />
-        View source
-      </a>
+      {url && url !== '' && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          <ExternalLink className="h-3 w-3" />
+          View source
+        </a>
+      )}
     </div>
   );
 });
