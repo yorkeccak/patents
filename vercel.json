@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/cleanup-patents",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

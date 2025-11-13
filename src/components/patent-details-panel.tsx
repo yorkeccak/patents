@@ -15,6 +15,15 @@ interface PatentDetailsPanelProps {
     url?: string;
     content: string;
     publication_date?: string;
+    // New fields from patentSearch with caching
+    abstract?: string;
+    patentNumber?: string;
+    patentIndex?: number;
+    assignees?: string[];
+    filingDate?: string;
+    publicationDate?: string;
+    claimsCount?: number;
+    fullContentCached?: boolean;
     metadata?: {
       patent_number?: string;
       application_number?: string;
@@ -60,6 +69,12 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
   };
 
   const extractAbstract = () => {
+    // If we have the abstract field directly (from patentSearch), use it
+    if (patent.abstract) {
+      return patent.abstract;
+    }
+
+    // Otherwise extract from content (old behavior)
     const content = patent.content || '';
     const abstractMatch = content.match(/##\s*Abstract\s*\n\n([\s\S]*?)(?=\n##|\n\n##|$)/);
     if (abstractMatch && abstractMatch[1]) {
@@ -67,6 +82,13 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
     }
     return content.substring(0, 500).trim();
   };
+
+  // Detect if we have full content or just abstract
+  const hasFullContent = patent.content && patent.content.length > 1000 &&
+                         (patent.content.includes('## Description') ||
+                          patent.content.includes('## Claims') ||
+                          patent.content.includes('DESCRIPTION') ||
+                          patent.content.includes('CLAIMS'));
 
   const status = getStatus();
   const ipcClass = getIPCClass();
@@ -137,7 +159,8 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
         <div className="p-4 space-y-4">
           {/* Key Information Grid */}
           <div className="grid grid-cols-2 gap-3">
-            {patent.metadata?.parties_assignees_name && (
+            {/* Assignees - support both new format (array) and old format (string) */}
+            {(patent.assignees?.length || patent.metadata?.parties_assignees_name) && (
               <div>
                 <div className="flex items-center gap-1 mb-1">
                   <Building2 className="w-3 h-3 text-muted-foreground" />
@@ -146,12 +169,13 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
                   </div>
                 </div>
                 <div className="text-sm text-foreground">
-                  {patent.metadata.parties_assignees_name}
+                  {patent.assignees?.length ? patent.assignees.join(', ') : patent.metadata?.parties_assignees_name}
                 </div>
               </div>
             )}
 
-            {patent.metadata?.filing_date && (
+            {/* Filing Date - support both new and old format */}
+            {(patent.filingDate || patent.metadata?.filing_date) && (
               <div>
                 <div className="flex items-center gap-1 mb-1">
                   <Calendar className="w-3 h-3 text-muted-foreground" />
@@ -160,12 +184,13 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
                   </div>
                 </div>
                 <div className="text-sm text-foreground">
-                  {formatDate(patent.metadata.filing_date)}
+                  {formatDate(patent.filingDate || patent.metadata?.filing_date)}
                 </div>
               </div>
             )}
 
-            {patent.metadata?.date_published && (
+            {/* Publication Date - support both new and old format */}
+            {(patent.publicationDate || patent.metadata?.date_published) && (
               <div>
                 <div className="flex items-center gap-1 mb-1">
                   <Calendar className="w-3 h-3 text-muted-foreground" />
@@ -174,7 +199,7 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
                   </div>
                 </div>
                 <div className="text-sm text-foreground">
-                  {formatDate(patent.metadata.date_published)}
+                  {formatDate(patent.publicationDate || patent.metadata?.date_published)}
                 </div>
               </div>
             )}
@@ -193,7 +218,8 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
               </div>
             )}
 
-            {patent.metadata?.number_of_claims && (
+            {/* Claims Count - support both new and old format */}
+            {(patent.claimsCount || patent.metadata?.number_of_claims) && (
               <div>
                 <div className="flex items-center gap-1 mb-1">
                   <Scale className="w-3 h-3 text-muted-foreground" />
@@ -202,7 +228,7 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
                   </div>
                 </div>
                 <div className="text-sm text-foreground">
-                  {patent.metadata.number_of_claims}
+                  {patent.claimsCount || patent.metadata?.number_of_claims}
                 </div>
               </div>
             )}
@@ -280,18 +306,41 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
             </p>
           </div>
 
-          {/* Full Content */}
-          <Separator />
-          <div>
-            <div className="text-xs font-semibold text-foreground mb-2">
-              Full Document
-            </div>
-            <div className="text-xs text-muted-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {patent.content}
-              </ReactMarkdown>
-            </div>
-          </div>
+          {/* Full Content - Only show if we have full patent details */}
+          {hasFullContent ? (
+            <>
+              <Separator />
+              <div>
+                <div className="text-xs font-semibold text-foreground mb-2">
+                  Full Document
+                </div>
+                <div className="text-xs text-muted-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {patent.content}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <Separator />
+              <div className="bg-muted/50 rounded-lg p-4 border border-border">
+                <div className="text-xs font-semibold text-foreground mb-2">
+                  Full Patent Details
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                  This view shows the abstract and key metadata only. To access the complete patent details including full claims, detailed description, and citations, use the <code className="bg-primary/10 text-primary px-1 py-0.5 rounded text-[10px]">readFullPatent</code> tool.
+                </p>
+                {patent.patentIndex !== undefined && (
+                  <div className="bg-background/50 rounded p-2 border border-border">
+                    <p className="text-[10px] text-muted-foreground font-mono">
+                      readFullPatent({'{'}patentIndex: {patent.patentIndex}{'}'})
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

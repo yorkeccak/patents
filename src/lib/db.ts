@@ -438,3 +438,204 @@ export async function createCSV(csv: {
   const { error } = await supabase.from("csvs").insert(csv);
   return { error };
 }
+
+// ============================================================================
+// PATENT CACHE FUNCTIONS
+// ============================================================================
+
+// Clear patent indices for a session (called before caching new search results)
+export async function clearPatentIndices(sessionId: string) {
+  if (isDevelopmentMode()) {
+    const db = getLocalDb();
+    await db
+      .update(schema.patentCache)
+      .set({ patentIndex: -1 }) // Set to -1 to indicate "no current index"
+      .where(eq(schema.patentCache.sessionId, sessionId));
+    return { error: null };
+  }
+
+  const supabase = await createSupabaseClient();
+  const { error } = await supabase
+    .from("patent_cache")
+    .update({ patent_index: -1 })
+    .eq("session_id", sessionId);
+  return { error };
+}
+
+export async function cachePatent(data: {
+  session_id: string;
+  patent_number: string;
+  patent_index: number;
+  title: string;
+  url?: string;
+  abstract: string;
+  full_content: string;
+  metadata?: any;
+}) {
+  if (isDevelopmentMode()) {
+    const db = getLocalDb();
+    // Generate a unique ID for SQLite (using session + patent_number)
+    const id = `${data.session_id}-${data.patent_number}`;
+
+    // Check if patent already exists
+    const existing = await db.query.patentCache.findFirst({
+      where: and(
+        eq(schema.patentCache.sessionId, data.session_id),
+        eq(schema.patentCache.patentNumber, data.patent_number)
+      ),
+    });
+
+    if (existing) {
+      // Update existing patent (refresh expires_at and set NEW index from current search)
+      await db
+        .update(schema.patentCache)
+        .set({
+          patentIndex: data.patent_index, // Update to new index from current search
+          title: data.title,
+          url: data.url || null,
+          abstract: data.abstract,
+          fullContent: data.full_content,
+          metadata: data.metadata ? JSON.stringify(data.metadata) : null,
+          expiresAt: new Date(Date.now() + 3600000), // 1 hour from now
+        })
+        .where(eq(schema.patentCache.id, existing.id));
+    } else {
+      // Insert new patent
+      await db.insert(schema.patentCache).values({
+        id: id,
+        sessionId: data.session_id,
+        patentNumber: data.patent_number,
+        patentIndex: data.patent_index,
+        title: data.title,
+        url: data.url || null,
+        abstract: data.abstract,
+        fullContent: data.full_content,
+        metadata: data.metadata ? JSON.stringify(data.metadata) : null,
+      });
+    }
+    return { error: null };
+  }
+
+  const supabase = await createSupabaseClient();
+
+  // Use upsert to handle the UNIQUE constraint on (session_id, patent_number)
+  // This caches ALL unique patents across multiple searches in the session
+  const { error } = await supabase.from("patent_cache")
+    .upsert({
+      session_id: data.session_id,
+      patent_number: data.patent_number,
+      patent_index: data.patent_index,
+      title: data.title,
+      url: data.url,
+      abstract: data.abstract,
+      full_content: data.full_content,
+      metadata: data.metadata,
+      // Update expires_at to extend cache when re-searching same patents
+      expires_at: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
+    }, {
+      onConflict: 'session_id,patent_number',
+      ignoreDuplicates: false, // Update on conflict to refresh expires_at
+    });
+
+  if (error) {
+    console.error('[cachePatent] Supabase error:', error);
+    console.error('[cachePatent] Data attempted:', {
+      session_id: data.session_id,
+      patent_index: data.patent_index,
+      patent_number: data.patent_number
+    });
+  } else {
+    console.log('[cachePatent] Successfully cached to Supabase:', {
+      session_id: data.session_id,
+      patent_index: data.patent_index,
+      patent_number: data.patent_number
+    });
+  }
+
+  return { error };
+}
+
+export async function getFullPatent(sessionId: string, patentIndex: number) {
+  if (isDevelopmentMode()) {
+    const db = getLocalDb();
+    // Get patent with this VALID index (>= 0) from the most recent search
+    // (Indices are cleared to -1 when new search starts)
+    const patents = await db.query.patentCache.findMany({
+      where: and(
+        eq(schema.patentCache.sessionId, sessionId),
+        eq(schema.patentCache.patentIndex, patentIndex)
+      ),
+      orderBy: [desc(schema.patentCache.createdAt)],
+      limit: 1,
+    });
+
+    const patent = patents[0] || null;
+
+    // Check if index is invalid (cleared by new search)
+    if (patent && patent.patentIndex < 0) {
+      return { data: null, error: null };
+    }
+
+    // Check if expired (SQLite stores as unix timestamp)
+    if (patent && patent.expiresAt && patent.expiresAt < new Date()) {
+      // Expired - delete it
+      await db
+        .delete(schema.patentCache)
+        .where(eq(schema.patentCache.id, patent.id));
+      return { data: null, error: null };
+    }
+
+    return { data: patent || null, error: null };
+  }
+
+  const supabase = await createSupabaseClient();
+
+  // Query for patents with this VALID index (>= 0) from the most recent search
+  // (Indices are cleared to -1 when new search starts)
+  const { data, error } = await supabase
+    .from("patent_cache")
+    .select("*")
+    .eq("session_id", sessionId)
+    .eq("patent_index", patentIndex)
+    .gte("patent_index", 0) // Only valid indices
+    .gt("expires_at", new Date().toISOString()) // Only get non-expired
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle(); // Use maybeSingle() to handle 0 or 1 results
+
+  return { data, error };
+}
+
+export async function cleanupExpiredPatents() {
+  if (isDevelopmentMode()) {
+    const db = getLocalDb();
+    const now = new Date();
+    await db
+      .delete(schema.patentCache)
+      .where(
+        // Using SQL comparison for timestamps in SQLite
+        and()
+      );
+    // For SQLite, we'll use a simpler approach - delete all where expiresAt < now
+    const allPatents = await db.query.patentCache.findMany();
+    const expiredIds = allPatents
+      .filter((p) => p.expiresAt && p.expiresAt < now)
+      .map((p) => p.id);
+
+    if (expiredIds.length > 0) {
+      for (const id of expiredIds) {
+        await db.delete(schema.patentCache).where(eq(schema.patentCache.id, id));
+      }
+    }
+
+    return { error: null, deletedCount: expiredIds.length };
+  }
+
+  const supabase = await createSupabaseClient();
+  const { error, count } = await supabase
+    .from("patent_cache")
+    .delete()
+    .lt("expires_at", new Date().toISOString());
+
+  return { error, deletedCount: count || 0 };
+}

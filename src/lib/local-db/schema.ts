@@ -89,6 +89,31 @@ export const csvs = sqliteTable("csvs", {
     .default(sql`(unixepoch())`),
 });
 
+// Patent cache table - for context management optimization
+export const patentCache = sqliteTable("patent_cache", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => chatSessions.id, { onDelete: "cascade" }),
+  patentNumber: text("patent_number").notNull(),
+  patentIndex: integer("patent_index").notNull(),
+  title: text("title").notNull(),
+  url: text("url"),
+  abstract: text("abstract").notNull(),
+  fullContent: text("full_content").notNull(),
+  metadata: text("metadata"), // JSON string
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  expiresAt: integer("expires_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch() + 3600)`), // 1 hour from now
+}, (table) => ({
+  // Unique constraint on session_id + patent_number (not patent_index)
+  // This allows caching all unique patents across multiple searches
+  uniquePatent: unique().on(table.sessionId, table.patentNumber),
+}));
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type ChatSession = typeof chatSessions.$inferSelect;
@@ -99,3 +124,5 @@ export type Chart = typeof charts.$inferSelect;
 export type InsertChart = typeof charts.$inferInsert;
 export type CSV = typeof csvs.$inferSelect;
 export type InsertCSV = typeof csvs.$inferInsert;
+export type PatentCache = typeof patentCache.$inferSelect;
+export type InsertPatentCache = typeof patentCache.$inferInsert;

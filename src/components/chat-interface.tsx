@@ -1509,6 +1509,15 @@ const SearchResultsCarousel = memo(function SearchResultsCarousel({
               publication_date: selectedPatent.publication_date,
               metadata: selectedPatent.metadata,
               relevance_score: selectedPatent.relevance_score,
+              // Pass through fields from patentSearch caching
+              abstract: selectedPatent.abstract,
+              patentNumber: selectedPatent.patentNumber,
+              patentIndex: selectedPatent.patentIndex,
+              assignees: selectedPatent.assignees,
+              filingDate: selectedPatent.filingDate,
+              publicationDate: selectedPatent.publicationDate,
+              claimsCount: selectedPatent.claimsCount,
+              fullContentCached: selectedPatent.fullContentCached,
             }}
             onClose={() => setSelectedPatent(null)}
           />
@@ -1722,6 +1731,7 @@ export function ChatInterface({
   } | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [liveProcessingTime, setLiveProcessingTime] = useState<number>(0);
+  const [selectedPatentFromTool, setSelectedPatentFromTool] = useState<any>(null);
 
   // Live reasoning preview - no longer needed as global state
   // Each reasoning component will handle its own preview based on streaming state
@@ -4005,6 +4015,103 @@ export function ChatInterface({
                                 );
                               }
 
+                              // readFullPatent tool
+                              case "tool-readFullPatent": {
+                                const callId = `${message.id}-${index}`;
+
+                                // Handle both string and object outputs
+                                let parsedOutput = part.output;
+                                if (typeof part.output === 'string') {
+                                  try {
+                                    parsedOutput = JSON.parse(part.output);
+                                  } catch (e) {
+                                    console.error('Failed to parse readFullPatent output:', e);
+                                  }
+                                }
+
+                                const hasOutput = parsedOutput && typeof parsedOutput === 'object';
+                                const isStreaming = part.state === "input-streaming" || part.state === "output-streaming";
+                                const isSuccess = hasOutput && parsedOutput?.success === true;
+                                const isError = hasOutput && parsedOutput?.error === true;
+
+                                return (
+                                  <div key={callId}>
+                                    <TimelineStep
+                                      part={part}
+                                      messageId={message.id}
+                                      index={index}
+                                      status={isStreaming ? "streaming" : isError ? "error" : "complete"}
+                                      type="tool"
+                                      title="Read Full Patent"
+                                      subtitle={isSuccess ? `Patent ${parsedOutput?.patentNumber || part.input?.patentIndex}` : undefined}
+                                      icon={<FileText />}
+                                      expandedTools={expandedTools}
+                                      toggleToolExpansion={toggleToolExpansion}
+                                    >
+                                      {isError && (
+                                        <div className="text-sm text-destructive p-3 bg-destructive/10 rounded">
+                                          {parsedOutput.message || "Failed to retrieve patent"}
+                                        </div>
+                                      )}
+                                      {isSuccess && (
+                                        <div className="text-xs space-y-3">
+                                          <div
+                                            className="p-3 bg-muted/50 rounded cursor-pointer hover:bg-muted transition-colors border border-transparent hover:border-primary/30"
+                                            onClick={() => {
+                                              // Create patent object with full content from sections
+                                              const fullContent = parsedOutput.sections
+                                                ? Object.entries(parsedOutput.sections).map(([key, value]) => {
+                                                    return `## ${key.charAt(0).toUpperCase() + key.slice(1)}\n\n${value}`;
+                                                  }).join('\n\n')
+                                                : '';
+
+                                              setSelectedPatentFromTool({
+                                                id: parsedOutput.patentNumber || parsedOutput.patentIndex,
+                                                title: parsedOutput.title,
+                                                url: parsedOutput.url,
+                                                content: fullContent,
+                                                fullContent: fullContent,
+                                                metadata: parsedOutput.metadata,
+                                                patentNumber: parsedOutput.patentNumber,
+                                              });
+                                            }}
+                                          >
+                                            <div className="font-semibold mb-2 text-foreground flex items-center gap-2">
+                                              {parsedOutput.title || "Patent Details"}
+                                              <span className="text-[10px] text-muted-foreground">(click to view)</span>
+                                            </div>
+                                            <div className="space-y-1 text-muted-foreground">
+                                              {parsedOutput.patentNumber && (
+                                                <div><span className="font-medium">Patent #:</span> {parsedOutput.patentNumber}</div>
+                                              )}
+                                              {parsedOutput.url && (
+                                                <div><span className="font-medium">URL:</span> <a href={parsedOutput.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>{parsedOutput.url}</a></div>
+                                              )}
+                                              {parsedOutput.sections && (
+                                                <div><span className="font-medium">Sections Retrieved:</span> {Object.keys(parsedOutput.sections).join(', ')}</div>
+                                              )}
+                                            </div>
+                                          </div>
+                                          {parsedOutput.note && (
+                                            <div className="text-[10px] text-muted-foreground italic p-2 bg-primary/5 rounded border border-primary/10">
+                                              💡 {parsedOutput.note}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                      {!isError && !isSuccess && hasOutput && (
+                                        <div className="text-xs p-3 bg-muted/50 rounded">
+                                          <div className="font-medium mb-2">Debug Output:</div>
+                                          <pre className="text-[10px] overflow-x-auto whitespace-pre-wrap">
+                                            {JSON.stringify(parsedOutput, null, 2)}
+                                          </pre>
+                                        </div>
+                                      )}
+                                    </TimelineStep>
+                                  </div>
+                                );
+                              }
+
                               // Generic dynamic tool fallback (for future tools)
                               case "dynamic-tool":
                                 return (
@@ -4039,6 +4146,36 @@ export function ChatInterface({
                                 );
 
                               default:
+                                // Show all other tools with generic display
+                                if (part.type?.startsWith("tool-")) {
+                                  const callId = `${message.id}-${index}`;
+                                  return (
+                                    <div key={callId}>
+                                      <TimelineStep
+                                        part={part}
+                                        messageId={message.id}
+                                        index={index}
+                                        status={part.state === "output-error" ? "error" : "complete"}
+                                        type="tool"
+                                        title={part.toolName || "Tool"}
+                                        icon={<Wrench />}
+                                        expandedTools={expandedTools}
+                                        toggleToolExpansion={toggleToolExpansion}
+                                      >
+                                        {part.state === "output-available" && part.output && (
+                                          <pre className="text-xs bg-muted/50 p-3 rounded overflow-x-auto">
+                                            {JSON.stringify(part.output, null, 2)}
+                                          </pre>
+                                        )}
+                                        {part.state === "output-error" && (
+                                          <div className="text-sm text-destructive p-3 bg-destructive/10 rounded">
+                                            {part.errorText || "Tool execution failed"}
+                                          </div>
+                                        )}
+                                      </TimelineStep>
+                                    </div>
+                                  );
+                                }
                                 return null;
                             }
                           }
@@ -4355,6 +4492,32 @@ export function ChatInterface({
         error={modelCompatibilityError?.message || ''}
         modelName={selectedModel || undefined}
       />
+
+      {/* Patent Details Panel - Shows when a patent from readFullPatent tool is clicked */}
+      {selectedPatentFromTool && (
+        <div className="fixed inset-y-0 right-0 w-[500px] bg-card border-l border-border shadow-2xl z-50 animate-in slide-in-from-right duration-300">
+          <PatentDetailsPanel
+            patent={{
+              id: selectedPatentFromTool.id,
+              title: selectedPatentFromTool.title,
+              url: selectedPatentFromTool.url,
+              content: selectedPatentFromTool.fullContent || selectedPatentFromTool.content || '',
+              publication_date: selectedPatentFromTool.publication_date || selectedPatentFromTool.publicationDate,
+              metadata: selectedPatentFromTool.metadata,
+              relevance_score: selectedPatentFromTool.relevance_score,
+              abstract: selectedPatentFromTool.abstract,
+              patentNumber: selectedPatentFromTool.patentNumber,
+              patentIndex: selectedPatentFromTool.patentIndex,
+              assignees: selectedPatentFromTool.assignees,
+              filingDate: selectedPatentFromTool.filingDate,
+              publicationDate: selectedPatentFromTool.publicationDate,
+              claimsCount: selectedPatentFromTool.claimsCount,
+              fullContentCached: selectedPatentFromTool.fullContentCached,
+            }}
+            onClose={() => setSelectedPatentFromTool(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }

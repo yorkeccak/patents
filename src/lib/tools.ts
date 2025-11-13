@@ -594,13 +594,91 @@ ${execution.result || '(No output produced)'}
           }
         }
 
+        // Cache full patent content and return truncated results
+        const { extractPatentAbstract, parsePatentMetadata, extractPatentNumber } = await import('./patent-utils');
+        const { cachePatent, clearPatentIndices } = await import('./db');
+
+        // CRITICAL: Clear old indices before caching new search results
+        // This ensures readFullPatent always retrieves from the MOST RECENT search
+        if (sessionId) {
+          console.log('[PatentSearch] Clearing old patent indices for session:', sessionId.substring(0, 8));
+          await clearPatentIndices(sessionId);
+          // Note: Patent cache cleanup is handled by Vercel Cron every hour (see vercel.json)
+        }
+
+        const truncatedResults = await Promise.all(
+          (response?.results || []).map(async (patent: any, index: number) => {
+            // Extract abstract and metadata
+            const abstract = extractPatentAbstract(patent.content);
+            const metadata = parsePatentMetadata(patent.content);
+            const patentNumber = extractPatentNumber(patent.content, patent.title);
+
+            // Cache full patent content if we have a session
+            // NOTE: Caches ALL unique patents (by patent_number) across multiple searches
+            // If the same patent appears in multiple searches, updates expires_at to extend cache
+            if (sessionId) {
+              try {
+                console.log(`[PatentSearch] Caching patent ${index}: ${patentNumber} for session ${sessionId.substring(0, 8)}...`);
+                const result = await cachePatent({
+                  session_id: sessionId,
+                  patent_number: patentNumber,
+                  patent_index: index,
+                  title: patent.title,
+                  url: patent.url,
+                  abstract: abstract,
+                  full_content: patent.content,
+                  metadata: metadata,
+                });
+                if (result.error) {
+                  console.error(`[PatentSearch] Cache error for patent ${index}:`, result.error);
+                } else {
+                  console.log(`[PatentSearch] ✓ Cached patent ${index}`);
+                }
+              } catch (cacheError) {
+                console.error('[PatentSearch] Failed to cache patent:', cacheError);
+                // Continue even if caching fails
+              }
+            } else {
+              console.warn('[PatentSearch] No sessionId - skipping cache');
+            }
+
+            // Return truncated version with just abstract
+            return {
+              patentIndex: index,
+              patentNumber: patentNumber,
+              title: patent.title,
+              abstract: abstract,
+              content: abstract, // For UI compatibility - shows in patent cards
+              url: patent.url,
+              assignees: metadata.assignees?.map(a => a.name) || [],
+              filingDate: metadata.filingDate,
+              publicationDate: metadata.publicationDate,
+              claimsCount: metadata.claimsCount,
+              relevance_score: patent.relevance_score,
+              fullContentCached: !!sessionId,
+              // Keep original fields for UI compatibility
+              source: patent.source,
+              data_type: patent.data_type,
+            };
+          })
+        );
+
+        // Debug: Count cache successes/failures
+        const cacheStats = {
+          sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : 'NONE',
+          patentsCached: sessionId ? truncatedResults.length : 0,
+        };
+        console.log('[PatentSearch] Cache stats:', cacheStats);
+
         return JSON.stringify({
           type: "patents",
           query: query,
-          resultCount: response?.results?.length || 0,
-          results: response?.results || [],
+          resultCount: truncatedResults.length,
+          results: truncatedResults,
           favicon: 'https://www.uspto.gov/favicon.ico',
-          displaySource: 'USPTO / EPO / PCT Patents'
+          displaySource: 'USPTO / EPO / PCT Patents',
+          note: `IMPORTANT: Abstracts only - Full content cached for session ${cacheStats.sessionId} (${cacheStats.patentsCached} patents). To access complete patent details (claims, description, citations), use readFullPatent tool with the patentIndex field from these results. Example: readFullPatent({patentIndex: 0}) for the first patent, readFullPatent({patentIndex: 2}) for the third patent, etc.`,
+          _debug: cacheStats,
         }, null, 2);
       } catch (error) {
         return `❌ Error searching patents: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -608,6 +686,123 @@ ${execution.result || '(No output produced)'}
     },
   }),
 
+  readFullPatent: tool({
+    description: `Retrieve complete patent details (full claims, description, citations) for patents from your most recent patentSearch.
+
+    WHEN TO USE THIS TOOL:
+    - User asks for "full claims" or "detailed claims"
+    - User asks for "claim chart" or "claim mapping"
+    - User asks for "FTO analysis" or "freedom to operate"
+    - User asks for "detailed technical description" or "technical implementation"
+    - User asks for "invalidation search" or "prior art mapping"
+    - User need specific claim limitations or detailed technical specifications
+    - User wants to compare patents at the claim level
+
+    HOW TO USE:
+    1. After running patentSearch, each patent result has a "patentIndex" field (0-19)
+    2. Use that patentIndex to retrieve the full patent: readFullPatent({patentIndex: 3})
+    3. You can call this multiple times for different patents in the same conversation
+
+    EXAMPLE WORKFLOW:
+    - patentSearch returns 10 patents with abstracts
+    - You identify patents at index 2, 5, and 7 as most relevant
+    - Call readFullPatent({patentIndex: 2}), readFullPatent({patentIndex: 5}), readFullPatent({patentIndex: 7})
+    - Now you have full claims and descriptions to create detailed analysis
+
+    The abstract from patentSearch is NOT sufficient for:
+    - Claim chart creation (need full claim text)
+    - FTO analysis (need claim-by-claim review)
+    - Technical comparison (need detailed descriptions)
+    - Finding specific technical limitations
+
+    Note: Patents are cached for 1 hour after patentSearch. If this tool returns an error,
+    run patentSearch again to refresh the cache.`,
+    inputSchema: z.object({
+      patentIndex: z.number().min(0).max(19).describe('The patentIndex field from the patentSearch results (0-19). Each patent in the search results has this field.'),
+      sections: z.array(z.enum(['abstract', 'claims', 'description', 'citations', 'drawings', 'all']))
+        .optional()
+        .describe('Specific sections to retrieve (default: all sections). Options: "claims" (patent claims only), "description" (detailed technical description), "citations" (prior art citations), "drawings" (description of figures), "all" (everything)')
+    }),
+    execute: async ({ patentIndex, sections }, options) => {
+      const sessionId = (options as any)?.experimental_context?.sessionId;
+
+      console.log('[ReadFullPatent] Called with:', { patentIndex, sections, sessionId });
+
+      if (!sessionId) {
+        console.error('[ReadFullPatent] No sessionId provided');
+        return JSON.stringify({
+          error: true,
+          message: 'No active session. Cannot retrieve cached patent.'
+        });
+      }
+
+      try {
+        const { getFullPatent } = await import('./db');
+        const { parsePatentSections } = await import('./patent-utils');
+
+        console.log('[ReadFullPatent] Fetching patent from cache:', { sessionId, patentIndex });
+
+        // Retrieve cached patent
+        const { data: cachedPatent, error } = await getFullPatent(sessionId, patentIndex);
+
+        console.log('[ReadFullPatent] Cache result:', {
+          found: !!cachedPatent,
+          error: error,
+          patentNumber: cachedPatent?.patentNumber || cachedPatent?.patent_number,
+          patentIndex: cachedPatent?.patentIndex || cachedPatent?.patent_index,
+        });
+
+        if (error) {
+          console.error('[ReadFullPatent] Database error:', error);
+          return JSON.stringify({
+            error: true,
+            message: `Database error: ${JSON.stringify(error)}`
+          });
+        }
+
+        if (!cachedPatent) {
+          console.warn('[ReadFullPatent] Patent not found at index', patentIndex);
+          return JSON.stringify({
+            error: true,
+            message: `Patent at index ${patentIndex} not found in cache. This usually means:\n1. The cache expired (lasts 1 hour)\n2. No patent was found at this index in your MOST RECENT search\n3. You're trying to access results from an old search\n\nSolution: Run a NEW patentSearch to refresh the cache, then try again.`
+          });
+        }
+
+        // Parse the requested sections
+        const parsedSections = parsePatentSections(
+          cachedPatent.fullContent || cachedPatent.full_content,
+          sections
+        );
+
+        // Parse metadata if it's a string
+        let metadata = cachedPatent.metadata;
+        if (typeof metadata === 'string') {
+          try {
+            metadata = JSON.parse(metadata);
+          } catch (e) {
+            metadata = {};
+          }
+        }
+
+        return JSON.stringify({
+          success: true,
+          patentIndex: patentIndex,
+          patentNumber: cachedPatent.patentNumber || cachedPatent.patent_number,
+          title: cachedPatent.title,
+          url: cachedPatent.url,
+          metadata: metadata,
+          sections: parsedSections,
+          note: 'Use this detailed information to create claim charts, perform FTO analysis, or conduct deep technical comparison.'
+        }, null, 2);
+
+      } catch (error) {
+        return JSON.stringify({
+          error: true,
+          message: `Failed to retrieve patent: ${error instanceof Error ? error.message : 'Unknown error'}`
+        });
+      }
+    },
+  }),
 
   webSearch: tool({
     description: "Search the web for general information on any topic",

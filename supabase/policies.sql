@@ -10,6 +10,7 @@ ALTER TABLE public.csvs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_rate_limits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.collections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.collection_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.patent_cache ENABLE ROW LEVEL SECURITY;
 
 -- Users table policies
 CREATE POLICY "Users can view their own data" ON public.users
@@ -131,4 +132,39 @@ CREATE POLICY "items_modify_if_owns_parent" ON public.collection_items
       WHERE collections.id = collection_items.collection_id
       AND collections.user_id = auth.uid()
     )
+  );
+
+-- Patent cache policies
+-- Allow SELECT/UPDATE/DELETE only for patents in user's sessions
+CREATE POLICY "Users can view patents from own sessions" ON public.patent_cache
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.chat_sessions
+      WHERE chat_sessions.id = patent_cache.session_id
+      AND chat_sessions.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can update patents from own sessions" ON public.patent_cache
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.chat_sessions
+      WHERE chat_sessions.id = patent_cache.session_id
+      AND chat_sessions.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can delete patents from own sessions" ON public.patent_cache
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM public.chat_sessions
+      WHERE chat_sessions.id = patent_cache.session_id
+      AND chat_sessions.user_id = auth.uid()
+    )
+  );
+
+-- Allow INSERT for authenticated users (session ownership checked on insert)
+CREATE POLICY "Authenticated users can cache patents" ON public.patent_cache
+  FOR INSERT WITH CHECK (
+    auth.role() = 'authenticated'
   );

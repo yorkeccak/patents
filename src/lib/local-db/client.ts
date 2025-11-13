@@ -95,10 +95,27 @@ function initializeDatabase(sqlite: Database.Database) {
       updated_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
+    CREATE TABLE IF NOT EXISTS patent_cache (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+      patent_number TEXT NOT NULL,
+      patent_index INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      url TEXT,
+      abstract TEXT NOT NULL,
+      full_content TEXT NOT NULL,
+      metadata TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      expires_at INTEGER NOT NULL DEFAULT (unixepoch() + 3600),
+      UNIQUE(session_id, patent_number)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
     CREATE INDEX IF NOT EXISTS idx_charts_session_id ON charts(session_id);
     CREATE INDEX IF NOT EXISTS idx_csvs_session_id ON csvs(session_id);
+    CREATE INDEX IF NOT EXISTS idx_patent_cache_session ON patent_cache(session_id);
+    CREATE INDEX IF NOT EXISTS idx_patent_cache_expires ON patent_cache(expires_at);
   `);
 
   // Insert dev user if it doesn't exist

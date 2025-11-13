@@ -112,6 +112,24 @@ CREATE TABLE IF NOT EXISTS public.collection_items (
   CONSTRAINT items_collection_id_fkey FOREIGN KEY (collection_id) REFERENCES public.collections(id) ON DELETE CASCADE
 );
 
+-- Patent cache for context management
+CREATE TABLE IF NOT EXISTS public.patent_cache (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  session_id uuid NOT NULL,
+  patent_number text NOT NULL,
+  patent_index integer NOT NULL,
+  title text NOT NULL,
+  url text,
+  abstract text NOT NULL,
+  full_content text NOT NULL,
+  metadata jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  expires_at timestamp with time zone DEFAULT (now() + interval '1 hour'),
+  CONSTRAINT patent_cache_pkey PRIMARY KEY (id),
+  CONSTRAINT patent_cache_session_fkey FOREIGN KEY (session_id) REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
+  CONSTRAINT patent_cache_unique UNIQUE (session_id, patent_number)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON public.chat_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_last_message ON public.chat_sessions(last_message_at DESC);
@@ -120,3 +138,6 @@ CREATE INDEX IF NOT EXISTS idx_charts_user_id ON public.charts(user_id);
 CREATE INDEX IF NOT EXISTS idx_csvs_user_id ON public.csvs(user_id);
 CREATE INDEX IF NOT EXISTS idx_collections_user_id ON public.collections(user_id);
 CREATE INDEX IF NOT EXISTS idx_collection_items_collection_id ON public.collection_items(collection_id);
+CREATE INDEX IF NOT EXISTS idx_patent_cache_session ON public.patent_cache(session_id);
+CREATE INDEX IF NOT EXISTS idx_patent_cache_expires ON public.patent_cache(expires_at);
+CREATE INDEX IF NOT EXISTS idx_patent_cache_created_at ON public.patent_cache(created_at DESC);
