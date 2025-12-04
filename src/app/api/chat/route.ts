@@ -444,6 +444,13 @@ export async function POST(req: Request) {
       2. Review abstracts and metadata to identify the most relevant patents
       3. ALWAYS cite patents using full patent numbers (e.g., "US 12014250 B2") with titles`}
 
+      ## TOOL CALL LIMITS - IMPORTANT
+      To ensure reliable responses and avoid timeouts:
+      - **Maximum 10 patentSearch calls per response** - consolidate searches with broader queries instead of many narrow searches
+      - **Maximum 3 codeExecution calls per response** - combine related computations into single code blocks
+      - If you need more searches, tell the user you'll continue in a follow-up message
+      - For complex queries spanning multiple topics, prioritize the most important searches first
+
       CRITICAL CITATION INSTRUCTIONS:
       When you use ANY search tool (clinical trials, drug information, biomedical literature, or web search) and reference information from the results in your response:
 
