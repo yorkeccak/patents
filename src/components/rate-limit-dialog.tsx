@@ -238,7 +238,7 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
                       className="w-full"
                     >
                       <CreditCard className="mr-2 h-4 w-4" />
-                      Unlimited - $50/month
+                      Unlimited - $15/month
                     </Button>
                   </div>
                 )}

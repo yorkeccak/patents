@@ -312,10 +312,10 @@ export function SubscriptionModal({ open, onClose }: SubscriptionModalProps) {
                 {/* Pricing */}
                 <div className="pt-4 border-t border-primary/20">
                   <div className="flex items-baseline gap-2 mb-1">
-                    <span className="text-3xl font-bold text-foreground">$50</span>
+                    <span className="text-3xl font-bold text-foreground">$15</span>
                     <span className="text-muted-foreground">/month</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mb-4">~$6.67/day for unlimited research</p>
+                  <p className="text-xs text-muted-foreground mb-4">~$0.50/day for unlimited research</p>
 
                   <button className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 group shadow-lg">
                     <span>Upgrade to Pro Unlimited</span>
