@@ -67,9 +67,7 @@ import {
   BarChart3,
   Check,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
+import { Streamdown } from "streamdown";
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { BiomedicalChart } from "@/components/financial-chart";
@@ -82,10 +80,6 @@ const JsonView = dynamic(() => import("@uiw/react-json-view"), {
   ssr: false,
   loading: () => <div className="text-xs text-muted-foreground">Loading JSON…</div>,
 });
-import {
-  preprocessMarkdownText,
-  cleanBiomedicalText,
-} from "@/lib/markdown-utils";
 import { parseFirstLine } from "@/lib/text-utils";
 import { motion, AnimatePresence } from "framer-motion";
 import DataSourceLogos from "./data-source-logos";
@@ -202,9 +196,9 @@ const TimelineStep = memo(({
         <div className="mt-1.5 ml-6 mr-2 animate-in fade-in duration-150">
           {children || (
             <div className="text-sm leading-relaxed text-foreground bg-muted/50 rounded-lg px-3 py-2.5 border-l-2 border-border">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+              <Streamdown className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                 {part.text || ''}
-              </ReactMarkdown>
+              </Streamdown>
             </div>
           )}
         </div>
@@ -466,113 +460,6 @@ const MemoizedCodeExecutionResult = memo(function MemoizedCodeExecutionResult({
 });
 MemoizedCodeExecutionResult.displayName = 'MemoizedCodeExecutionResult';
 
-// Enhanced markdown components that handle both math and biomedical content
-const markdownComponents = {
-  img: ({ src, alt, ...props }: any) => {
-    // Don't render image if src is empty or undefined
-    if (!src || src.trim() === "") {
-      return null;
-    }
-
-
-    // Validate URL for regular images - must be absolute URL or start with /
-    try {
-      // Check if it's a valid absolute URL
-      new URL(src);
-    } catch {
-      // Check if it starts with / (valid relative path for Next.js)
-      if (!src.startsWith('/') && !src.startsWith('csv:') && !src.match(/^\/api\/(charts|csvs)\//)) {
-        return (
-          <span className="text-xs text-muted-foreground italic">
-            [Image: {alt || src}]
-          </span>
-        );
-      }
-    }
-
-    return <Image src={src} alt={alt || ""} width={500} height={300} {...props} />;
-  },
-  iframe: ({ src, ...props }: any) => {
-    // Don't render iframe if src is empty or undefined
-    if (!src || src.trim() === "") {
-      return null;
-    }
-    return <iframe src={src} {...props} />;
-  },
-  math: ({ children }: any) => {
-    // Render math content using KaTeX
-    const mathContent =
-      typeof children === "string" ? children : children?.toString() || "";
-
-    try {
-      const html = katex.renderToString(mathContent, {
-        displayMode: false,
-        throwOnError: false,
-        strict: false,
-      });
-      return (
-        <span
-          dangerouslySetInnerHTML={{ __html: html }}
-          className="katex-math"
-        />
-      );
-    } catch (error) {
-      return (
-        <code className="math-fallback bg-muted px-1 rounded">
-          {mathContent}
-        </code>
-      );
-    }
-  },
-  // Handle academic XML tags commonly found in Wiley content
-  note: ({ children }: any) => (
-    <div className="bg-primary/10 border-l-4 border-primary pl-4 py-2 my-2 text-sm">
-      <div className="flex items-start gap-2">
-        <span className="text-primary font-medium">Note:</span>
-        <div>{children}</div>
-      </div>
-    </div>
-  ),
-  t: ({ children }: any) => (
-    <span className="font-mono text-sm bg-muted px-1 rounded">
-      {children}
-    </span>
-  ),
-  f: ({ children }: any) => (
-    <span className="italic">{children}</span>
-  ),
-  // Handle other common academic tags
-  ref: ({ children }: any) => (
-    <span className="text-primary text-sm">
-      [{children}]
-    </span>
-  ),
-  caption: ({ children }: any) => (
-    <div className="text-sm text-muted-foreground italic text-center my-2">
-      {children}
-    </div>
-  ),
-  figure: ({ children }: any) => (
-    <div className="my-4 p-2 border border-border rounded">
-      {children}
-    </div>
-  ),
-  // Fix paragraph wrapping for block elements (charts) to avoid hydration errors
-  p: ({ children, ...props }: any) => {
-    // Check if this paragraph contains any React component (like charts)
-    const hasBlockContent = React.Children.toArray(children).some((child: any) => {
-      return React.isValidElement(child) && typeof child.type !== 'string';
-    });
-
-    // If paragraph contains block content (like charts), render as div to avoid hydration errors
-    if (hasBlockContent) {
-      return <div {...props}>{children}</div>;
-    }
-
-    return <p {...props}>{children}</p>;
-  },
-};
-
 // Memoized component for parsed first line to avoid repeated parsing
 const MemoizedFirstLine = memo(function MemoizedFirstLine({
   text,
@@ -699,26 +586,38 @@ const parseSpecialReferences = (text: string): Array<{ type: 'text' | 'csv' | 'c
   return segments;
 };
 
-// Memoized Markdown renderer to avoid re-parsing on unrelated state updates
+// Memoized Markdown renderer using Streamdown for better streaming performance
 const MemoizedMarkdown = memo(function MemoizedMarkdown({
   text,
+  isAnimating = false,
 }: {
   text: string;
+  isAnimating?: boolean;
 }) {
-  const enableRawHtml = (text?.length || 0) < 20000;
-
   // Parse special references (CSV/charts) - MUST be before any conditional returns
   const specialSegments = useMemo(() => parseSpecialReferences(text), [text]);
   const hasSpecialRefs = specialSegments.some(s => s.type === 'csv' || s.type === 'chart');
 
-  // Process text for regular markdown - MUST be before any conditional returns
-  const processed = useMemo(
-    () => {
-      const result = preprocessMarkdownText(cleanBiomedicalText(text || ""));
-      return result;
+  // Streamdown components for custom rendering
+  const streamdownComponents = useMemo(() => ({
+    code: ({ children, className }: { children?: React.ReactNode; className?: string }) => {
+      const content = typeof children === "string" ? children : children?.toString() || "";
+      // Check if this is a math block
+      if (className === "language-math" || className === "math") {
+        try {
+          const html = katex.renderToString(content, {
+            displayMode: true,
+            throwOnError: false,
+            strict: false,
+          });
+          return <div dangerouslySetInnerHTML={{ __html: html }} className="katex-display my-4" />;
+        } catch (error) {
+          return <code className="bg-muted px-1 rounded">{content}</code>;
+        }
+      }
+      return <code className={className}>{children}</code>;
     },
-    [text]
-  );
+  }), []);
 
   // If we have CSV or chart references, render them separately to avoid nesting issues
   if (hasSpecialRefs) {
@@ -731,19 +630,16 @@ const MemoizedMarkdown = memo(function MemoizedMarkdown({
           if (segment.type === 'chart' && segment.id) {
             return <ChartImageRenderer key={`${segment.id}-${idx}`} chartId={segment.id} />;
           }
-          // Render text segment as markdown
-          const segmentProcessed = preprocessMarkdownText(cleanBiomedicalText(segment.content));
+          // Render text segment with Streamdown
           return (
-            <ReactMarkdown
+            <Streamdown
               key={idx}
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents as any}
-              rehypePlugins={enableRawHtml ? [rehypeRaw] : []}
-              skipHtml={!enableRawHtml}
-              unwrapDisallowed={true}
+              className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+              isAnimating={isAnimating}
+              components={streamdownComponents}
             >
-              {segmentProcessed}
-            </ReactMarkdown>
+              {segment.content}
+            </Streamdown>
           );
         })}
       </>
@@ -751,19 +647,17 @@ const MemoizedMarkdown = memo(function MemoizedMarkdown({
   }
 
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={markdownComponents as any}
-      rehypePlugins={enableRawHtml ? [rehypeRaw] : []}
-      skipHtml={!enableRawHtml}
-      unwrapDisallowed={true}
+    <Streamdown
+      className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+      isAnimating={isAnimating}
+      components={streamdownComponents}
     >
-      {processed}
-    </ReactMarkdown>
+      {text}
+    </Streamdown>
   );
 }, (prevProps, nextProps) => {
   // PERFORMANCE FIX: Only re-render if text actually changes
-  return prevProps.text === nextProps.text;
+  return prevProps.text === nextProps.text && prevProps.isAnimating === nextProps.isAnimating;
 });
 
 // THIS IS THE KEY OPTIMIZATION - prevents re-renders during streaming
@@ -775,12 +669,14 @@ const MemoizedTextPartWithCitations = memo(
     currentPartIndex,
     allMessages,
     currentMessageIndex,
+    isAnimating = false,
   }: {
     text: string;
     messageParts: any[];
     currentPartIndex: number;
     allMessages?: any[];
     currentMessageIndex?: number;
+    isAnimating?: boolean;
   }) {
     // Extract citations only when parts before this one change, not when text streams
     const citations = useMemo(() => {
@@ -937,9 +833,9 @@ const MemoizedTextPartWithCitations = memo(
 
     // Render with or without citations
     if (hasCitations) {
-      return <CitationTextRenderer text={text} citations={citations} />;
+      return <CitationTextRenderer text={text} citations={citations} isAnimating={isAnimating} />;
     } else {
-      return <MemoizedMarkdown text={text} />;
+      return <MemoizedMarkdown text={text} isAnimating={isAnimating} />;
     }
   },
   (prevProps, nextProps) => {
@@ -948,7 +844,8 @@ const MemoizedTextPartWithCitations = memo(
     return (
       prevProps.text === nextProps.text &&
       prevProps.currentPartIndex === nextProps.currentPartIndex &&
-      prevProps.messageParts.length === nextProps.messageParts.length
+      prevProps.messageParts.length === nextProps.messageParts.length &&
+      prevProps.isAnimating === nextProps.isAnimating
     );
   }
 );
@@ -3386,6 +3283,7 @@ export function ChatInterface({
                                       currentPartIndex={index}
                                       allMessages={deferredMessages}
                                       currentMessageIndex={realIndex}
+                                      isAnimating={isLoading && realIndex === messages.length - 1}
                                     />
                                   </div>
                                 );

@@ -257,7 +257,7 @@ export async function POST(req: Request) {
           'x-local-provider': req.headers.get('x-local-provider'),
           'x-ollama-model': req.headers.get('x-ollama-model')
         });
-        selectedModel = hasOpenAIKey ? openai("gpt-5") : "openai/gpt-5";
+        selectedModel = hasOpenAIKey ? openai("gpt-5.1") : "openai/gpt-5";
         modelInfo = hasOpenAIKey
           ? "OpenAI (gpt-5) - Development Mode Fallback"
           : 'Vercel AI Gateway ("gpt-5") - Development Mode Fallback';

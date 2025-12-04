@@ -1,13 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
+import React, { useState, useEffect, useMemo, createContext, useContext, ReactNode } from "react";
+import { Streamdown } from "streamdown";
 import katex from "katex";
 import {
   InlineCitation,
-  InlineCitationText,
   InlineCitationCard,
   InlineCitationCardTrigger,
   InlineCitationCardBody,
@@ -20,7 +17,6 @@ import {
   InlineCitationQuote,
 } from "@/components/ai/inline-citation";
 import { CitationMap } from "@/lib/citation-utils";
-import { preprocessMarkdownText, cleanBiomedicalText } from "@/lib/markdown-utils";
 import { BiomedicalChart } from "@/components/financial-chart";
 import { CsvRenderer } from "@/components/csv-renderer";
 
@@ -28,7 +24,11 @@ interface CitationTextRendererProps {
   text: string;
   citations: CitationMap;
   className?: string;
+  isAnimating?: boolean;
 }
+
+// Context to pass citations down to custom components
+const CitationsContext = createContext<CitationMap>({});
 
 // Cache for chart data to prevent re-fetching during streaming
 const chartDataCache = new Map<string, any>();
@@ -40,7 +40,6 @@ const InlineChartRenderer = React.memo(({ chartId, alt }: { chartId: string; alt
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    // If already cached, don't fetch again
     if (chartDataCache.has(chartId)) {
       return;
     }
@@ -61,7 +60,6 @@ const InlineChartRenderer = React.memo(({ chartId, alt }: { chartId: string; alt
         const data = await response.json();
         if (cancelled) return;
 
-        // Cache the result
         chartDataCache.set(chartId, data);
         setChartData(data);
         setLoading(false);
@@ -105,20 +103,17 @@ const InlineChartRenderer = React.memo(({ chartId, alt }: { chartId: string; alt
 
 InlineChartRenderer.displayName = 'InlineChartRenderer';
 
-// CSV rendering now handled by shared CsvRenderer component
-
 // Component to render grouped citations with hover card
-const GroupedCitationBadge = React.memo(({ 
-  citationKeys, 
-  citations 
-}: { 
-  citationKeys: string[]; 
+const GroupedCitationBadge = React.memo(({
+  citationKeys,
+  citations
+}: {
+  citationKeys: string[];
   citations: CitationMap;
 }) => {
-  // Collect all citations from all keys
   const allCitations: any[] = [];
   const allSources: string[] = [];
-  
+
   citationKeys.forEach(key => {
     const citationList = citations[key] || [];
     citationList.forEach(citation => {
@@ -128,9 +123,8 @@ const GroupedCitationBadge = React.memo(({
       }
     });
   });
-  
+
   if (allCitations.length === 0) {
-    // If no citations found, just show the keys without hover
     return <span className="text-primary">{citationKeys.join('')}</span>;
   }
 
@@ -174,163 +168,129 @@ const GroupedCitationBadge = React.memo(({
 
 GroupedCitationBadge.displayName = "GroupedCitationBadge";
 
-// Parse text to find grouped citations like [1][2][3] or [1,2,3]
-const parseGroupedCitations = (text: string): { segments: Array<{ type: 'text' | 'citation-group', content: string, citations?: string[] }> } => {
+// Process text to find and render citations
+function processTextWithCitations(text: string, citations: CitationMap): ReactNode[] {
   // Pattern to match grouped citations: [1][2][3] or [1,2,3] or [1, 2, 3]
   const groupedPattern = /((?:\[\d+\])+|\[\d+(?:\s*,\s*\d+)*\])/g;
-  const segments: Array<{ type: 'text' | 'citation-group', content: string, citations?: string[] }> = [];
-  let lastIndex = 0;
+  const parts = text.split(groupedPattern);
 
-  let match;
-  while ((match = groupedPattern.exec(text)) !== null) {
-    // Add text before citation group
-    if (match.index > lastIndex) {
-      segments.push({
-        type: 'text',
-        content: text.substring(lastIndex, match.index)
-      });
-    }
+  return parts.map((part, index) => {
+    // Check if this part matches a citation pattern
+    if (groupedPattern.test(part)) {
+      // Reset lastIndex after test
+      groupedPattern.lastIndex = 0;
 
-    // Parse the citation group
-    const citationGroup = match[0];
-    const citations: string[] = [];
-    
-    if (citationGroup.includes(',')) {
-      // Handle [1,2,3] format
-      const numbers = citationGroup.match(/\d+/g) || [];
-      numbers.forEach(num => citations.push(`[${num}]`));
-    } else {
-      // Handle [1][2][3] format
-      const individualCitations = citationGroup.match(/\[\d+\]/g) || [];
-      citations.push(...individualCitations);
-    }
+      const citationKeys: string[] = [];
 
-    segments.push({
-      type: 'citation-group',
-      content: citationGroup,
-      citations
-    });
-
-    lastIndex = match.index + match[0].length;
-  }
-
-  // Add remaining text
-  if (lastIndex < text.length) {
-    segments.push({
-      type: 'text',
-      content: text.substring(lastIndex)
-    });
-  }
-
-  return { segments };
-};
-
-// Custom markdown components that handle citations
-const createMarkdownComponents = (citations: CitationMap) => ({
-  // Handle inline text that might contain citations
-  p: ({ children, ...props }: any) => {
-    // Process children to handle citation markers
-    const processedChildren = React.Children.map(children, (child) => {
-      if (typeof child === 'string') {
-        const { segments } = parseGroupedCitations(child);
-        
-        if (segments.some(s => s.type === 'citation-group')) {
-          return segments.map((segment, idx) => {
-            if (segment.type === 'citation-group' && segment.citations) {
-              return <GroupedCitationBadge key={idx} citationKeys={segment.citations} citations={citations} />;
-            }
-            return <span key={idx}>{segment.content}</span>;
-          });
-        }
+      if (part.includes(',')) {
+        // Handle [1,2,3] format
+        const numbers = part.match(/\d+/g) || [];
+        numbers.forEach(num => citationKeys.push(`[${num}]`));
+      } else {
+        // Handle [1][2][3] format
+        const individualCitations = part.match(/\[\d+\]/g) || [];
+        citationKeys.push(...individualCitations);
       }
-      return child;
-    });
 
-    return <p {...props}>{processedChildren}</p>;
-  },
-  
-  // Handle other text containers similarly
-  li: ({ children, ...props }: any) => {
-    const processedChildren = React.Children.map(children, (child) => {
-      if (typeof child === 'string') {
-        const { segments } = parseGroupedCitations(child);
-        
-        if (segments.some(s => s.type === 'citation-group')) {
-          return segments.map((segment, idx) => {
-            if (segment.type === 'citation-group' && segment.citations) {
-              return <GroupedCitationBadge key={idx} citationKeys={segment.citations} citations={citations} />;
-            }
-            return <span key={idx}>{segment.content}</span>;
-          });
-        }
+      if (citationKeys.length > 0) {
+        return <GroupedCitationBadge key={index} citationKeys={citationKeys} citations={citations} />;
       }
-      return child;
-    });
+    }
+    return part;
+  });
+}
 
-    return <li {...props}>{processedChildren}</li>;
-  },
-  
-  // Handle math rendering
-  math: ({ children }: any) => {
-    const mathContent = typeof children === "string" ? children : children?.toString() || "";
+// Wrapper components for Streamdown that handle citations
+function ParagraphWithCitations({ children }: { children?: ReactNode }) {
+  const citations = useContext(CitationsContext);
+
+  const processChildren = (child: ReactNode): ReactNode => {
+    if (typeof child === "string") {
+      return processTextWithCitations(child, citations);
+    }
+    return child;
+  };
+
+  const processed = Array.isArray(children)
+    ? children.map((child, i) => <span key={i}>{processChildren(child)}</span>)
+    : processChildren(children);
+
+  return <p>{processed}</p>;
+}
+
+function HeadingWithCitations({ level, children }: { level: 1 | 2 | 3 | 4 | 5 | 6; children?: ReactNode }) {
+  const citations = useContext(CitationsContext);
+  const Tag = `h${level}` as const;
+
+  const processChildren = (child: ReactNode): ReactNode => {
+    if (typeof child === "string") {
+      return processTextWithCitations(child, citations);
+    }
+    return child;
+  };
+
+  const processed = Array.isArray(children)
+    ? children.map((child, i) => <span key={i}>{processChildren(child)}</span>)
+    : processChildren(children);
+
+  return <Tag>{processed}</Tag>;
+}
+
+function ListItemWithCitations({ children }: { children?: ReactNode }) {
+  const citations = useContext(CitationsContext);
+
+  const processChildren = (child: ReactNode): ReactNode => {
+    if (typeof child === "string") {
+      return processTextWithCitations(child, citations);
+    }
+    return child;
+  };
+
+  const processed = Array.isArray(children)
+    ? children.map((child, i) => <span key={i}>{processChildren(child)}</span>)
+    : processChildren(children);
+
+  return <li>{processed}</li>;
+}
+
+function StrongWithCitations({ children }: { children?: ReactNode }) {
+  const citations = useContext(CitationsContext);
+
+  const processChildren = (child: ReactNode): ReactNode => {
+    if (typeof child === "string") {
+      return processTextWithCitations(child, citations);
+    }
+    return child;
+  };
+
+  const processed = Array.isArray(children)
+    ? children.map((child, i) => <span key={i}>{processChildren(child)}</span>)
+    : processChildren(children);
+
+  return <strong>{processed}</strong>;
+}
+
+// Custom code component for math rendering
+function CodeWithMath({ children, className }: { children?: ReactNode; className?: string }) {
+  const isInline = !className;
+  const content = typeof children === "string" ? children : children?.toString() || "";
+
+  // Check if this is a math block (language-math class)
+  if (className === "language-math" || className === "math") {
     try {
-      const html = katex.renderToString(mathContent, {
-        displayMode: false,
+      const html = katex.renderToString(content, {
+        displayMode: true,
         throwOnError: false,
         strict: false,
       });
-      return <span dangerouslySetInnerHTML={{ __html: html }} className="katex-math" />;
+      return <div dangerouslySetInnerHTML={{ __html: html }} className="katex-display my-4" />;
     } catch (error) {
-      return <code className="math-fallback bg-muted px-1 rounded">{mathContent}</code>;
+      return <code className="bg-muted px-1 rounded">{content}</code>;
     }
-  },
-  
-  // Handle images and special references (charts and CSVs)
-  // Note: We can't return block-level elements (div) from img handler as ReactMarkdown wraps them in <p>
-  // CSVs and charts are handled via preprocessing instead
-  img: ({ src, alt, ...props }: any) => {
-    if (!src || src.trim() === "") return null;
+  }
 
-
-    try {
-      new URL(src);
-    } catch {
-      if (!src.startsWith('/') && !src.startsWith('csv:') && !src.match(/^\/api\/(charts|csvs)\//)) {
-        return (
-          <span className="text-xs text-muted-foreground italic">
-            [Image: {alt || src}]
-          </span>
-        );
-      }
-    }
-
-    return <img src={src} alt={alt || ""} {...props} />;
-  },
-
-  // Also handle links that might reference CSVs
-  a: ({ href, children, ...props }: any) => {
-    if (!href) return <a {...props}>{children}</a>;
-
-    // Check if this is a CSV reference link
-    const csvProtocolMatch = href.match(/^csv:([a-f0-9-]+)$/i);
-    const csvApiMatch = href.match(/^\/api\/csvs\/([a-f0-9-]+)$/i);
-
-    if (csvProtocolMatch) {
-      const csvId = csvProtocolMatch[1];
-      const label = typeof children === 'string' ? children : undefined;
-      return <CsvRenderer csvId={csvId} alt={label} />;
-    }
-
-    if (csvApiMatch) {
-      const csvId = csvApiMatch[1];
-      const label = typeof children === 'string' ? children : undefined;
-      return <CsvRenderer csvId={csvId} alt={label} />;
-    }
-
-    // Regular link
-    return <a href={href} {...props}>{children}</a>;
-  },
-});
+  return <code className={className}>{children}</code>;
+}
 
 // Helper to parse and extract CSV/chart references from markdown
 const parseSpecialReferences = (text: string): Array<{ type: 'text' | 'csv' | 'chart', content: string, id?: string }> => {
@@ -343,7 +303,6 @@ const parseSpecialReferences = (text: string): Array<{ type: 'text' | 'csv' | 'c
   let match;
 
   while ((match = pattern.exec(text)) !== null) {
-    // Add text before the reference
     if (match.index > lastIndex) {
       segments.push({
         type: 'text',
@@ -353,7 +312,6 @@ const parseSpecialReferences = (text: string): Array<{ type: 'text' | 'csv' | 'c
 
     const url = match[2];
 
-    // Check if it's a CSV reference
     const csvProtocolMatch = url.match(/^csv:([a-f0-9-]+)$/i);
     const csvApiMatch = url.match(/^\/api\/csvs\/([a-f0-9-]+)$/i);
 
@@ -365,7 +323,6 @@ const parseSpecialReferences = (text: string): Array<{ type: 'text' | 'csv' | 'c
         id: csvId
       });
     } else {
-      // Chart reference
       const chartMatch = url.match(/^\/api\/charts\/([^\/]+)\/image$/);
       if (chartMatch) {
         segments.push({
@@ -379,7 +336,6 @@ const parseSpecialReferences = (text: string): Array<{ type: 'text' | 'csv' | 'c
     lastIndex = match.index + match[0].length;
   }
 
-  // Add remaining text
   if (lastIndex < text.length) {
     segments.push({
       type: 'text',
@@ -393,100 +349,75 @@ const parseSpecialReferences = (text: string): Array<{ type: 'text' | 'csv' | 'c
 export const CitationTextRenderer = React.memo(({
   text,
   citations,
-  className = ""
+  className = "",
+  isAnimating = false
 }: CitationTextRendererProps) => {
-  // CRITICAL: Only enable HTML processing for short text (< 20K chars)
-  // This prevents massive performance issues with large responses
-  const enableRawHtml = (text?.length || 0) < 20000;
-
-  // ALL HOOKS MUST BE BEFORE ANY CONDITIONAL RETURNS
-  const processedText = React.useMemo(
-    () => preprocessMarkdownText(cleanBiomedicalText(text || "")),
-    [text]
-  );
-
-  const markdownComponents = React.useMemo(
-    () => createMarkdownComponents(citations),
-    [citations]
-  );
+  // Memoize the custom components for Streamdown
+  const components = useMemo(() => ({
+    p: ParagraphWithCitations,
+    h1: (props: { children?: ReactNode }) => <HeadingWithCitations level={1} {...props} />,
+    h2: (props: { children?: ReactNode }) => <HeadingWithCitations level={2} {...props} />,
+    h3: (props: { children?: ReactNode }) => <HeadingWithCitations level={3} {...props} />,
+    h4: (props: { children?: ReactNode }) => <HeadingWithCitations level={4} {...props} />,
+    h5: (props: { children?: ReactNode }) => <HeadingWithCitations level={5} {...props} />,
+    h6: (props: { children?: ReactNode }) => <HeadingWithCitations level={6} {...props} />,
+    li: ListItemWithCitations,
+    strong: StrongWithCitations,
+    code: CodeWithMath,
+  }), []);
 
   // Parse special references (CSV/charts)
-  const specialSegments = React.useMemo(() => parseSpecialReferences(text), [text]);
+  const specialSegments = useMemo(() => parseSpecialReferences(text), [text]);
   const hasSpecialRefs = specialSegments.some(s => s.type === 'csv' || s.type === 'chart');
-
-  // Memoize parsed segments to avoid re-parsing on every render during streaming
-  const parsedSegments = React.useMemo(() => {
-    if (!text.includes('#') && !text.includes('*') && !text.includes('`') && !text.includes('<')) {
-      return parseGroupedCitations(text);
-    }
-    return null;
-  }, [text]);
-
-  const hasCitationGroups = parsedSegments && parsedSegments.segments.some(s => s.type === 'citation-group');
 
   // If we have CSV or chart references, render them separately to avoid nesting issues
   if (hasSpecialRefs) {
     return (
       <div className={className}>
-        {specialSegments.map((segment, idx) => {
-          if (segment.type === 'csv' && segment.id) {
-            return <CsvRenderer key={`${segment.id}-${idx}`} csvId={segment.id} />;
-          }
-          if (segment.type === 'chart' && segment.id) {
-            return <InlineChartRenderer key={`${segment.id}-${idx}`} chartId={segment.id} />;
-          }
-          // Render text segment as markdown
-          return (
-            <ReactMarkdown
-              key={idx}
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={enableRawHtml ? [rehypeRaw] : []}
-              skipHtml={!enableRawHtml}
-              components={markdownComponents as any}
-              unwrapDisallowed={true}
-            >
-              {preprocessMarkdownText(cleanBiomedicalText(segment.content))}
-            </ReactMarkdown>
-          );
-        })}
-      </div>
-    );
-  }
-
-  // For simple text without markdown, handle citations directly
-  if (hasCitationGroups && parsedSegments) {
-    const { segments } = parsedSegments;
-    return (
-      <div className={className}>
-        {segments.map((segment, idx) => {
-          if (segment.type === 'citation-group' && segment.citations) {
-            return <GroupedCitationBadge key={idx} citationKeys={segment.citations} citations={citations} />;
-          }
-          return <span key={idx}>{segment.content}</span>;
-        })}
+        <CitationsContext.Provider value={citations}>
+          {specialSegments.map((segment, idx) => {
+            if (segment.type === 'csv' && segment.id) {
+              return <CsvRenderer key={`${segment.id}-${idx}`} csvId={segment.id} />;
+            }
+            if (segment.type === 'chart' && segment.id) {
+              return <InlineChartRenderer key={`${segment.id}-${idx}`} chartId={segment.id} />;
+            }
+            // Render text segment with Streamdown
+            return (
+              <Streamdown
+                key={idx}
+                className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                isAnimating={isAnimating}
+                components={components}
+              >
+                {segment.content}
+              </Streamdown>
+            );
+          })}
+        </CitationsContext.Provider>
       </div>
     );
   }
 
   return (
-    <div className={className}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={enableRawHtml ? [rehypeRaw] : []}
-        skipHtml={!enableRawHtml}
-        components={markdownComponents as any}
-        unwrapDisallowed={true}
-      >
-        {processedText}
-      </ReactMarkdown>
-    </div>
+    <CitationsContext.Provider value={citations}>
+      <div className={className}>
+        <Streamdown
+          className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+          isAnimating={isAnimating}
+          components={components}
+        >
+          {text}
+        </Streamdown>
+      </div>
+    </CitationsContext.Provider>
   );
 }, (prevProps, nextProps) => {
-  // Custom comparison: only re-render if text or citations changed
   return (
     prevProps.text === nextProps.text &&
     Object.keys(prevProps.citations).length === Object.keys(nextProps.citations).length &&
-    prevProps.className === nextProps.className
+    prevProps.className === nextProps.className &&
+    prevProps.isAnimating === nextProps.isAnimating
   );
 });
 

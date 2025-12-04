@@ -10,8 +10,8 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^2.0.16",
-    "@ai-sdk/react": "^2.0.16",
+    "@ai-sdk/openai": "^2.0.77",
+    "@ai-sdk/react": "^2.0.106",
     "@daytonaio/sdk": "^0.25.5",
     "@polar-sh/ingestion": "^0.3.1",
     "@polar-sh/nextjs": "^0.4.4",
@@ -35,7 +35,7 @@
     "@types/katex": "^0.16.7",
     "@uiw/react-json-view": "^2.0.0-alpha.34",
     "@vercel/analytics": "^1.5.0",
-    "ai": "^5.0.16",
+    "ai": "^5.0.106",
     "better-sqlite3": "^12.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -57,16 +57,14 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-icons": "^5.5.0",
-    "react-markdown": "^10.1.0",
     "recharts": "^2.15.4",
-    "rehype-raw": "^7.0.0",
-    "remark-gfm": "^4.0.1",
     "resend": "^6.0.1",
+    "streamdown": "^1.6.10",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.3.6",
     "valyu-js": "^2.0.2",
-    "zod": "^4.0.17",
+    "zod": "^4.1.13",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

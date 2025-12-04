@@ -5,8 +5,7 @@ import { X, ExternalLink, Download, Share2, Building2, Calendar, Scale, FileText
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { Streamdown } from 'streamdown';
 
 interface PatentDetailsPanelProps {
   patent: {
@@ -315,9 +314,9 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
                   Full Document
                 </div>
                 <div className="text-xs text-muted-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <Streamdown className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                     {patent.content}
-                  </ReactMarkdown>
+                  </Streamdown>
                 </div>
               </div>
             </>
