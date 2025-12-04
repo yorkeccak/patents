@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo } from 'react';
-import { X, ExternalLink, Download, Share2, Building2, Calendar, Scale, FileText, Users, TrendingUp } from 'lucide-react';
+import { X, ExternalLink, Building2, Calendar, Scale, FileText, Users, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -142,14 +142,6 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
               </a>
             </Button>
           )}
-          <Button variant="outline" size="sm" className="h-8 text-xs">
-            <Download className="w-3 h-3 mr-1" />
-            Export
-          </Button>
-          <Button variant="outline" size="sm" className="h-8 text-xs">
-            <Share2 className="w-3 h-3 mr-1" />
-            Share
-          </Button>
         </div>
       </div>
 

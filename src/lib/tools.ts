@@ -4,7 +4,6 @@ import { Valyu } from "valyu-js";
 import { track } from "@vercel/analytics/server";
 import { PolarEventTracker } from '@/lib/polar-events';
 import { Daytona } from '@daytonaio/sdk';
-import { createClient } from '@/utils/supabase/server';
 import * as db from '@/lib/db';
 import { randomUUID } from 'crypto';
 
