@@ -1,5 +1,5 @@
 import { streamText, convertToModelMessages } from "ai";
-import { healthcareTools } from "@/lib/tools";
+import { getToolsForUser } from "@/lib/tools";
 import { BiomedUIMessage } from "@/lib/types";
 import { openai, createOpenAI } from "@ai-sdk/openai";
 import { createOllama, ollama } from "ollama-ai-provider-v2";
@@ -372,10 +372,13 @@ export async function POST(req: Request) {
       }
     }
 
+    // Get tools based on user authentication status
+    const tools = getToolsForUser(!!user);
+
     const result = streamText({
       model: selectedModel as any,
       messages: convertToModelMessages(messages),
-      tools: healthcareTools,
+      tools,
       toolChoice: "auto",
       experimental_context: {
         userId: user?.id,
@@ -387,27 +390,28 @@ export async function POST(req: Request) {
       system: `You are a helpful patent research assistant with access to comprehensive tools for patent search, Python code execution, data visualization, and analysis.
 
       **Today's Date:** ${new Date().toISOString().split('T')[0]}
-
+      ${!user ? `
+      **NOTE:** You do not have access to the readFullPatent tool because the user is not signed in. If they request full patent details, claims, or FTO analysis, politely let them know they need to sign up (free) to access complete patent documents.
+      ` : ''}
       ## PATENT SEARCH WORKFLOW - CRITICAL
 
-      You have TWO specialized patent tools optimized for context efficiency:
+      You have ${user ? 'TWO' : 'ONE'} specialized patent tool${user ? 's' : ''} optimized for context efficiency:
 
       ### 1. patentSearch (Initial Broad Search)
       - Returns up to 20 patents with ABSTRACTS ONLY and key metadata
-      - Each result includes a **patentIndex** field (0-19) - you MUST use this to retrieve full details
+      - Each result includes a **patentIndex** field (0-19)${user ? ' - you MUST use this to retrieve full details' : ''}
       - Full patent content is automatically cached for 1 hour
       - Abstracts provide sufficient detail for initial relevance assessment
       - Use this for: patent landscape analysis, portfolio overviews, initial screening, competitive intelligence
-
-      ### 2. readFullPatent (Deep Dive Analysis) - REQUIRES SIGN-IN
+      ${user ? `
+      ### 2. readFullPatent (Deep Dive Analysis)
       - Retrieves complete patent details (full claims, description, citations) by patentIndex
       - Input parameter: **patentIndex** (the number from patentSearch results, e.g., 0, 1, 2, 3...)
       - REQUIRED for: claim charts, FTO analysis, detailed technical comparison, claim-by-claim review
       - Optional section filtering to save context: 'claims', 'description', 'citations', 'drawings', 'all'
-      - **NOTE:** This tool requires the user to be signed in. If an anonymous user requests full patent details, politely inform them they need to sign up or log in to access this feature.
-      - Can be called multiple times for different patents in the same conversation
+      - Can be called multiple times for different patents in the same conversation` : ''}
 
-      ### RECOMMENDED WORKFLOW:
+      ${user ? `### RECOMMENDED WORKFLOW:
       1. Use **patentSearch** to identify relevant patents (scan abstracts and metadata)
       2. Note the **patentIndex** values (0-19) in the results for patents you want to analyze
       3. Use **readFullPatent** with those patentIndex values for detailed analysis
@@ -435,7 +439,10 @@ export async function POST(req: Request) {
       - Patent cache expires after 1 hour - if readFullPatent fails, run patentSearch again
       - You can search hundreds of patents efficiently because only abstracts consume context
       - Only retrieve full patent details when user explicitly needs detailed analysis
-      - Always reference patents by their full patent number for proper citation
+      - Always reference patents by their full patent number for proper citation` : `### WORKFLOW:
+      1. Use **patentSearch** to find relevant patents
+      2. Review abstracts and metadata to identify the most relevant patents
+      3. ALWAYS cite patents using full patent numbers (e.g., "US 12014250 B2") with titles`}
 
       CRITICAL CITATION INSTRUCTIONS:
       When you use ANY search tool (clinical trials, drug information, biomedical literature, or web search) and reference information from the results in your response:

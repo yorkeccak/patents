@@ -725,19 +725,8 @@ ${execution.result || '(No output produced)'}
     }),
     execute: async ({ patentIndex, sections }, options) => {
       const sessionId = (options as any)?.experimental_context?.sessionId;
-      const userId = (options as any)?.experimental_context?.userId;
 
-      console.log('[ReadFullPatent] Called with:', { patentIndex, sections, sessionId, userId });
-
-      // Require authentication for full patent retrieval
-      if (!userId) {
-        console.log('[ReadFullPatent] Anonymous user attempted to access full patent');
-        return JSON.stringify({
-          error: true,
-          message: 'Full patent details require a free account. Please sign up or log in to access complete patent claims, descriptions, and citations.',
-          requiresAuth: true
-        });
-      }
+      console.log('[ReadFullPatent] Called with:', { patentIndex, sections, sessionId });
 
       if (!sessionId) {
         console.error('[ReadFullPatent] No sessionId provided');
@@ -868,6 +857,17 @@ ${execution.result || '(No output produced)'}
     },
   }),
 };
+
+// Function to get tools based on user authentication status
+export function getToolsForUser(isAuthenticated: boolean) {
+  if (isAuthenticated) {
+    return healthcareTools;
+  }
+
+  // For anonymous users, exclude readFullPatent
+  const { readFullPatent, ...anonymousTools } = healthcareTools;
+  return anonymousTools;
+}
 
 // Export with both names for compatibility
 export const biomedicalTools = healthcareTools;
