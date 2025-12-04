@@ -725,14 +725,25 @@ ${execution.result || '(No output produced)'}
     }),
     execute: async ({ patentIndex, sections }, options) => {
       const sessionId = (options as any)?.experimental_context?.sessionId;
+      const userId = (options as any)?.experimental_context?.userId;
 
-      console.log('[ReadFullPatent] Called with:', { patentIndex, sections, sessionId });
+      console.log('[ReadFullPatent] Called with:', { patentIndex, sections, sessionId, userId });
+
+      // Require authentication for full patent retrieval
+      if (!userId) {
+        console.log('[ReadFullPatent] Anonymous user attempted to access full patent');
+        return JSON.stringify({
+          error: true,
+          message: 'Full patent details require a free account. Please sign up or log in to access complete patent claims, descriptions, and citations.',
+          requiresAuth: true
+        });
+      }
 
       if (!sessionId) {
         console.error('[ReadFullPatent] No sessionId provided');
         return JSON.stringify({
           error: true,
-          message: 'No active session. Cannot retrieve cached patent.'
+          message: 'No active session. Please try your search again.'
         });
       }
 
