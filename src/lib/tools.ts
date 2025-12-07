@@ -7,6 +7,74 @@ import { Daytona } from '@daytonaio/sdk';
 import * as db from '@/lib/db';
 import { randomUUID } from 'crypto';
 
+// Valyu OAuth Proxy URL (on Valyu Platform)
+const VALYU_OAUTH_PROXY_URL = process.env.VALYU_OAUTH_PROXY_URL ||
+  `${process.env.VALYU_APP_URL || process.env.NEXT_PUBLIC_VALYU_APP_URL || 'https://platform.valyu.ai'}/api/oauth/proxy`;
+
+/**
+ * Call Valyu API via OAuth proxy (uses user's org API key)
+ * Falls back to direct API call if no token provided
+ */
+async function callValyuApi(
+  path: string,
+  body: Record<string, unknown>,
+  valyuAccessToken?: string
+): Promise<any> {
+  if (valyuAccessToken) {
+    // Use OAuth proxy - charges to user's org credits
+    console.log(`[Valyu Proxy] Calling ${path} via OAuth proxy`);
+    const response = await fetch(VALYU_OAUTH_PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${valyuAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        path,
+        method: 'POST',
+        body,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Valyu Proxy] Error ${response.status}:`, errorText);
+      throw new Error(`Valyu proxy error: ${response.status} - ${errorText}`);
+    }
+
+    return response.json();
+  } else {
+    // Fall back to direct API call with server API key
+    const apiKey = process.env.VALYU_API_KEY;
+    if (!apiKey) {
+      throw new Error('No Valyu API key configured');
+    }
+
+    console.log(`[Valyu Direct] Calling ${path} with server API key`);
+    const valyu = new Valyu(apiKey, "https://api.valyu.ai/v1");
+
+    // Map path to SDK method
+    if (path === '/v1/search' || path === '/v1/deepsearch') {
+      return valyu.search(body.query as string, {
+        maxNumResults: body.maxNumResults as number,
+        includedSources: body.includedSources as string[],
+      });
+    }
+
+    // Generic fetch for other paths
+    const response = await fetch(`https://api.valyu.ai${path}`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    return response.json();
+  }
+}
+
 export const healthcareTools = {
   // Chart Creation Tool - Create interactive charts for patent analytics and visualization
   createChart: tool({
@@ -554,24 +622,33 @@ ${execution.result || '(No output produced)'}
       const userId = (options as any)?.experimental_context?.userId;
       const sessionId = (options as any)?.experimental_context?.sessionId;
       const userTier = (options as any)?.experimental_context?.userTier;
+      const valyuAccessToken = (options as any)?.experimental_context?.valyuAccessToken;
       const isDevelopment = process.env.NEXT_PUBLIC_APP_MODE === 'development';
 
       try {
-        const apiKey = process.env.VALYU_API_KEY;
-        if (!apiKey) {
-          return "❌ Valyu API key not configured.";
+        // Check if we have either a Valyu token (OAuth) or server API key
+        const hasValyuToken = !!valyuAccessToken;
+        const hasServerApiKey = !!process.env.VALYU_API_KEY;
+
+        if (!hasValyuToken && !hasServerApiKey) {
+          return "❌ Valyu API not configured. Please sign in with Valyu or configure server API key.";
         }
-        const valyu = new Valyu(apiKey, "https://api.valyu.ai/v1");
 
         // Ensure maxNumResults is within API limits (1-20)
         const clampedMaxResults = Math.min(Math.max(maxResults || 10, 1), 20);
 
-        const response = await valyu.search(query, {
-          maxNumResults: clampedMaxResults,
-          includedSources: ["valyu/valyu-patents"]
-        });
+        // Call Valyu API (via proxy if user has OAuth token, otherwise direct)
+        const response = await callValyuApi(
+          '/v1/deepsearch',
+          {
+            query,
+            max_num_results: clampedMaxResults,
+            included_sources: ["valyu/valyu-patents"],
+          },
+          valyuAccessToken
+        );
 
-        console.log("response", response);
+        console.log("[PatentSearch] Response received, results:", response?.results?.length || 0);
 
         await track("Valyu API Call", {
           toolType: "patentSearch",
@@ -869,4 +946,5 @@ export function getToolsForUser(isAuthenticated: boolean) {
 }
 
 // Export with both names for compatibility
-export const biomedicalTools = healthcareTools;
+export const patentTools = healthcareTools;
+export const biomedicalTools = healthcareTools; // Legacy alias

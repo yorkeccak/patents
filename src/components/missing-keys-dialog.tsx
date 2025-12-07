@@ -71,7 +71,7 @@ export function MissingKeysDialog() {
             <div className="rounded-md border p-3">
               <div className="font-medium">Missing VALYU_API_KEY</div>
               <div className="text-muted-foreground">
-                Add VALYU_API_KEY to your environment to enable biomedical data and
+                Add VALYU_API_KEY to your environment to enable patent search and
                 web search.
               </div>
             </div>

@@ -17,7 +17,7 @@ import {
   InlineCitationQuote,
 } from "@/components/ai/inline-citation";
 import { CitationMap } from "@/lib/citation-utils";
-import { BiomedicalChart } from "@/components/financial-chart";
+import { PatentChart } from "@/components/financial-chart";
 import { CsvRenderer } from "@/components/csv-renderer";
 
 interface CitationTextRendererProps {
@@ -96,7 +96,7 @@ const InlineChartRenderer = React.memo(({ chartId, alt }: { chartId: string; alt
 
   return (
     <div className="my-4">
-      <BiomedicalChart {...chartData} />
+      <PatentChart {...chartData} />
     </div>
   );
 }, (prevProps, nextProps) => prevProps.chartId === nextProps.chartId);

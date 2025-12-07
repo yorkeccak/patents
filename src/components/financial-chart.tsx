@@ -13,7 +13,7 @@ import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 
-// Professional color palette for biomedical research
+// Professional color palette for patent analytics
 const DEFAULT_COLORS = [
   '#1e40af', // Deep Blue
   '#0891b2', // Cyan
@@ -35,7 +35,7 @@ interface DataSeries {
   data: DataPoint[];
 }
 
-interface BiomedicalChartProps {
+interface PatentChartProps {
   chartType: 'line' | 'bar' | 'area' | 'scatter' | 'quadrant';
   title: string;
   xAxisLabel: string;
@@ -53,7 +53,7 @@ interface BiomedicalChartProps {
   hideDownloadButton?: boolean;
 }
 
-function BiomedicalChartComponent({
+function PatentChartComponent({
   chartType,
   title,
   xAxisLabel,
@@ -62,7 +62,7 @@ function BiomedicalChartComponent({
   description,
   metadata,
   hideDownloadButton = false,
-}: BiomedicalChartProps) {
+}: PatentChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -513,7 +513,7 @@ function BiomedicalChartComponent({
 }
 
 // Memoize the component to prevent unnecessary re-renders
-export const BiomedicalChart = React.memo(BiomedicalChartComponent, (prevProps, nextProps) => {
+export const PatentChart = React.memo(PatentChartComponent, (prevProps, nextProps) => {
   return (
     prevProps.chartType === nextProps.chartType &&
     prevProps.title === nextProps.title &&
@@ -525,4 +525,7 @@ export const BiomedicalChart = React.memo(BiomedicalChartComponent, (prevProps, 
   );
 });
 
-BiomedicalChart.displayName = 'BiomedicalChart';
+PatentChart.displayName = 'PatentChart';
+
+// Legacy alias for backwards compatibility
+export const BiomedicalChart = PatentChart;

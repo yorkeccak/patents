@@ -77,11 +77,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             <Avatar className="h-12 w-12">
               <AvatarImage src={user.user_metadata?.avatar_url} />
               <AvatarFallback>
-                {user.email?.[0]?.toUpperCase()}
+                {user.email?.[0]?.toUpperCase() || user.user_metadata?.full_name?.[0]?.toUpperCase() || 'U'}
               </AvatarFallback>
             </Avatar>
             <div>
-              <p className="text-sm font-medium">{user.email?.split('@')[0]}</p>
+              <p className="text-sm font-medium">{user.user_metadata?.full_name || user.email?.split('@')[0]}</p>
               <p className="text-xs text-muted-foreground">{user.email}</p>
             </div>
           </div>

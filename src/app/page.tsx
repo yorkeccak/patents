@@ -69,10 +69,6 @@ function HomeContent() {
     }
   }, [user, messageCount]);
 
-  const handleSignUpSuccess = useCallback((message: string) => {
-    setNotification({ type: 'success', message });
-  }, []);
-
   // Sync currentSessionId with URL param on mount and URL changes
   useEffect(() => {
     const chatIdFromUrl = searchParams.get('chatId');
@@ -425,7 +421,6 @@ function HomeContent() {
       <AuthModal
         open={showAuthModal}
         onClose={() => setShowAuthModal(false)}
-        onSignUpSuccess={handleSignUpSuccess}
       />
 
       {/* Signup Prompt for non-logged-in users */}

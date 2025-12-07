@@ -15,8 +15,7 @@ import {
   Settings,
   LogOut,
   Trash2,
-  CreditCard,
-  BarChart3,
+  ExternalLink,
   Plus,
   Building2,
 } from 'lucide-react';
@@ -24,8 +23,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { SettingsModal } from '@/components/user/settings-modal';
-import { SubscriptionModal } from '@/components/user/subscription-modal';
-import { useSubscription } from '@/hooks/use-subscription';
 import { EnterpriseContactModal } from '@/components/enterprise/enterprise-contact-modal';
 
 interface SidebarProps {
@@ -49,7 +46,8 @@ export function Sidebar({
   onNewChat,
   hasMessages = false,
 }: SidebarProps) {
-  const { user } = useAuthStore();
+  const { user, valyuAccessToken } = useAuthStore();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
   const signOut = useAuthStore((state) => state.signOut);
   const router = useRouter();
   const pathname = usePathname();
@@ -61,38 +59,27 @@ export function Sidebar({
   const [alwaysOpen, setAlwaysOpen] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showSubscription, setShowSubscription] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showEnterpriseModal, setShowEnterpriseModal] = useState(false);
 
-  // Fetch chat sessions
+  // Fetch chat sessions (uses Supabase cookies for auth)
+  // Note: Sessions require Supabase user, not just Valyu token
   const { data: sessions = [], isLoading: loadingSessions } = useQuery({
     queryKey: ['sessions'],
     queryFn: async () => {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-
-      const response = await fetch('/api/chat/sessions', {
-        headers: { 'Authorization': `Bearer ${session?.access_token}` }
-      });
-
+      const response = await fetch('/api/chat/sessions');
       const { sessions } = await response.json();
       return sessions;
     },
-    enabled: !!user
+    enabled: !!user // Sessions require Supabase user
   });
 
   // Delete session mutation
   const deleteMutation = useMutation({
     mutationFn: async (sessionId: string) => {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-
       await fetch(`/api/chat/sessions/${sessionId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${session?.access_token}` }
       });
-
       return sessionId;
     },
     onSuccess: (sessionId) => {
@@ -128,9 +115,9 @@ export function Sidebar({
     }
   }, [alwaysOpen]);
 
-  // Listen for upgrade modal trigger from rate limit banner
+  // Listen for upgrade modal trigger - now redirects to Valyu
   useEffect(() => {
-    const handleShowUpgradeModal = () => setShowSubscription(true);
+    const handleShowUpgradeModal = () => handleViewUsage();
     window.addEventListener('show-upgrade-modal', handleShowUpgradeModal);
     return () => window.removeEventListener('show-upgrade-modal', handleShowUpgradeModal);
   }, []);
@@ -139,7 +126,7 @@ export function Sidebar({
     // If there's an active chat (either with session ID or just messages), warn before leaving
     if (currentSessionId || hasMessages) {
       const confirmed = window.confirm(
-        user
+        isAuthenticated
           ? 'Leave this conversation? Your chat history will be saved.'
           : 'Start a new chat? Your current conversation will be lost.'
       );
@@ -180,27 +167,10 @@ export function Sidebar({
   };
 
   const handleViewUsage = async () => {
-    try {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-
-      const response = await fetch('/api/customer-portal', {
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`
-        }
-      });
-
-      if (response.ok) {
-        const { redirectUrl } = await response.json();
-        window.open(redirectUrl, '_blank');
-      }
-    } catch (error) {
-    }
+    // Valyu users can view their usage on the Valyu platform
+    const valyuUrl = process.env.NEXT_PUBLIC_VALYU_OAUTH_URL || 'https://platform.valyu.ai';
+    window.open(`${valyuUrl}/user/account`, '_blank');
   };
-
-  // Get subscription status from database
-  const subscription = useSubscription();
-  const { isPaid } = subscription;
 
   return (
     <>
@@ -303,7 +273,7 @@ export function Sidebar({
               <div className="w-10 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
               {/* New Chat */}
-              {user && (
+              {isAuthenticated && (
                 <div className="relative group/tooltip">
                   <button
                     onClick={handleNewChat}
@@ -321,14 +291,14 @@ export function Sidebar({
               <div className="relative group/tooltip">
                 <button
                   onClick={() => {
-                    if (!user) {
+                    if (!isAuthenticated) {
                       window.dispatchEvent(new CustomEvent('show-auth-modal'));
                     } else {
                       setShowHistory(!showHistory);
                     }
                   }}
                   className={`w-12 h-12 flex items-center justify-center rounded-[20px] transition-all duration-200 hover:scale-110 active:scale-95 ${
-                    !user
+                    !isAuthenticated
                       ? 'opacity-50 cursor-not-allowed hover:bg-muted'
                       : showHistory
                         ? 'bg-card dark:bg-muted shadow-lg'
@@ -336,7 +306,7 @@ export function Sidebar({
                   }`}
                 >
                   <MessagesSquare className={`h-6 w-6 transition-colors ${
-                    !user
+                    !isAuthenticated
                       ? 'text-muted-foreground'
                       : showHistory
                         ? 'text-primary-foreground'
@@ -344,46 +314,30 @@ export function Sidebar({
                   }`} />
                 </button>
                 <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
-                  {!user ? 'Sign up (free) for history' : 'History'}
+                  {!isAuthenticated ? 'Sign up (free) for history' : 'History'}
                 </div>
               </div>
 
               {/* Divider */}
-              {user && !isDevelopment && <div className="w-10 h-px bg-gradient-to-r from-transparent via-border to-transparent my-1" />}
+              {isAuthenticated && !isDevelopment && <div className="w-10 h-px bg-gradient-to-r from-transparent via-border to-transparent my-1" />}
 
-              {/* Billing/Subscription - Hidden in development mode */}
-              {user && !isDevelopment && (
-                <>
-                  {!isPaid ? (
-                    <div className="relative group/tooltip">
-                      <button
-                        onClick={() => setShowSubscription(true)}
-                        className="w-12 h-12 flex items-center justify-center hover:bg-muted rounded-[20px] transition-all duration-200 group hover:scale-110 active:scale-95"
-                      >
-                        <CreditCard className="h-6 w-6 text-muted-foreground group-hover:text-foreground transition-colors" />
-                      </button>
-                      <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
-                        Upgrade
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="relative group/tooltip">
-                      <button
-                        onClick={handleViewUsage}
-                        className="w-12 h-12 flex items-center justify-center hover:bg-muted rounded-[20px] transition-all duration-200 group hover:scale-110 active:scale-95"
-                      >
-                        <BarChart3 className="h-6 w-6 text-muted-foreground group-hover:text-foreground transition-colors" />
-                      </button>
-                      <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
-                        Usage & Billing
-                      </div>
-                    </div>
-                  )}
-                </>
+              {/* Valyu Account - Links to Valyu platform for credits/billing */}
+              {isAuthenticated && !isDevelopment && (
+                <div className="relative group/tooltip">
+                  <button
+                    onClick={handleViewUsage}
+                    className="w-12 h-12 flex items-center justify-center hover:bg-muted rounded-[20px] transition-all duration-200 group hover:scale-110 active:scale-95"
+                  >
+                    <ExternalLink className="h-6 w-6 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </button>
+                  <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                    Valyu Account
+                  </div>
+                </div>
               )}
 
               {/* Enterprise */}
-              {user && process.env.NEXT_PUBLIC_APP_MODE !== 'development' && process.env.NEXT_PUBLIC_ENTERPRISE === 'true' && (
+              {isAuthenticated && process.env.NEXT_PUBLIC_APP_MODE !== 'development' && process.env.NEXT_PUBLIC_ENTERPRISE === 'true' && (
                 <div className="relative group/tooltip">
                   <button
                     onClick={() => setShowEnterpriseModal(true)}
@@ -398,7 +352,7 @@ export function Sidebar({
               )}
 
               {/* Settings */}
-              {user && (
+              {isAuthenticated && (
                 <div className="relative group/tooltip">
                   <button
                     onClick={() => setShowSettings(true)}
@@ -416,7 +370,7 @@ export function Sidebar({
               <div className="w-10 h-px bg-gradient-to-r from-transparent via-border to-transparent mt-1" />
 
               {/* Log In Button for unauthenticated users */}
-              {!user && (
+              {!isAuthenticated && (
                 <div className="relative group/tooltip">
                   <button
                     onClick={() => {
@@ -437,16 +391,16 @@ export function Sidebar({
               )}
 
               {/* User Avatar with Dropdown */}
-              {user && (
+              {isAuthenticated && (
                 <div className="relative group/tooltip">
                   <button
                     onClick={() => setShowProfileMenu(!showProfileMenu)}
                     className="w-12 h-12 flex items-center justify-center hover:bg-muted rounded-[20px] transition-all duration-200 hover:scale-110 active:scale-95"
                   >
                     <Avatar className="h-9 w-9 ring-2 ring-transparent hover:ring-border transition-all">
-                      <AvatarImage src={user.user_metadata?.avatar_url} />
+                      <AvatarImage src={user?.user_metadata?.avatar_url} />
                       <AvatarFallback className="text-xs bg-primary text-primary-foreground font-semibold">
-                        {user.email?.[0]?.toUpperCase() || 'U'}
+                        {user?.email?.[0]?.toUpperCase() || user?.user_metadata?.full_name?.[0]?.toUpperCase() || 'V'}
                       </AvatarFallback>
                     </Avatar>
                   </button>
@@ -475,9 +429,9 @@ export function Sidebar({
                         >
                         {/* User Email */}
                         <div className="px-3 py-2.5 mb-1">
-                          <p className="text-xs text-muted-foreground mb-1">Signed in as</p>
+                          <p className="text-xs text-muted-foreground mb-1">Signed in with Valyu</p>
                           <p className="text-sm font-medium text-foreground truncate">
-                            {user.email}
+                            {user?.email || 'Connected'}
                           </p>
                         </div>
 
@@ -541,7 +495,7 @@ export function Sidebar({
 
       {/* History Panel */}
       <AnimatePresence>
-        {showHistory && user && (
+        {showHistory && isAuthenticated && (
           <>
             {/* Backdrop */}
             <motion.div
@@ -639,11 +593,6 @@ export function Sidebar({
       <SettingsModal
         open={showSettings}
         onClose={() => setShowSettings(false)}
-      />
-
-      <SubscriptionModal
-        open={showSubscription}
-        onClose={() => setShowSubscription(false)}
       />
 
       <EnterpriseContactModal

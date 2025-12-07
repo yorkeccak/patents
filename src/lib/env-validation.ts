@@ -42,7 +42,7 @@ export function validatePaymentEnvironment(): EnvValidationResult {
     
     // API keys for usage tracking
     if (!process.env.VALYU_API_KEY) {
-      warnings.push('VALYU_API_KEY missing - biomedical/web search will fail');
+      warnings.push('VALYU_API_KEY missing - patent/web search will fail');
     }
     if (!process.env.DAYTONA_API_KEY) {
       warnings.push('DAYTONA_API_KEY missing - code execution will fail');

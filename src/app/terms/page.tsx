@@ -19,7 +19,7 @@ export default function TermsOfService() {
           <section className="mb-8">
             <h2 className="text-xl font-semibold text-foreground mb-4">2. Description of Service</h2>
             <p className="text-foreground mb-4">
-              Our service provides AI-powered biomedical research and analysis tools using:
+              Our service provides AI-powered patents research and analysis tools using:
             </p>
             <ul className="list-disc pl-6 text-foreground space-y-2">
               <li>OpenAI GPT-5 for natural language processing</li>

@@ -36,7 +36,7 @@ export function preprocessMarkdownText(text: string): string {
     .replace(/(?<!<math>)\\\w+\([^)]*\)(?![^<]*<\/math>)/g, (match) => `<math>${match}</math>`);
 
   // Fix any character-level breaks that might have occurred
-  processedText = cleanBiomedicalText(processedText);
+  processedText = cleanPatentText(processedText);
 
   return processedText;
 }
@@ -65,7 +65,7 @@ export function needsCleaning(text: string): boolean {
 /**
  * Fixes severely corrupted text caused by LaTeX misinterpretation
  */
-export function cleanBiomedicalText(text: string): string {
+export function cleanPatentText(text: string): string {
   if (!text || typeof text !== 'string' || !needsCleaning(text)) {
     return text;
   }
@@ -85,3 +85,6 @@ export function cleanBiomedicalText(text: string): string {
     .replace(/\b([a-z])\s+([a-z])\s+([a-z])\s+([a-z])\s+([a-z])\s+([a-z])\b/g, '$1$2$3$4$5$6')
     .replace(/\b([a-z])\s+([a-z])\s+([a-z])\s+([a-z])\s+([a-z])\b/g, '$1$2$3$4$5')
 }
+
+// Legacy alias for backwards compatibility
+export const cleanBiomedicalText = cleanPatentText;

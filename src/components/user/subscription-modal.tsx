@@ -164,7 +164,7 @@ export function SubscriptionModal({ open, onClose }: SubscriptionModalProps) {
       <DialogContent className="!max-w-5xl sm:!max-w-5xl md:!max-w-5xl lg:!max-w-5xl !w-[95vw] sm:!w-[90vw] md:!w-[85vw] lg:!w-[1000px] bg-card border-border">
         <DialogHeader className="space-y-3 pb-6">
           <DialogTitle className="text-2xl font-semibold text-foreground text-center">
-            Unlock Professional-Grade Biomedical Research
+            Unlock Professional-Grade Patent Research
           </DialogTitle>
           <p className="text-sm text-muted-foreground text-center max-w-lg mx-auto">
             Access institutional-quality research tools that save hours of analysis time. Choose the plan that fits your workflow.
@@ -231,7 +231,7 @@ export function SubscriptionModal({ open, onClose }: SubscriptionModalProps) {
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                    <p className="text-sm text-foreground"><span className="font-medium">Full tool access</span> – Biomedical data, charts, analysis</p>
+                    <p className="text-sm text-foreground"><span className="font-medium">Full tool access</span> – Patent search, charts, analysis</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />

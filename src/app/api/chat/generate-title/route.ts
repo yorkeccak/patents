@@ -1,6 +1,5 @@
 import { generateText } from 'ai';
 import { openai, createOpenAI } from '@ai-sdk/openai';
-import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: Request) {
   let requestBody: { message: string } | null = null;
@@ -97,9 +96,9 @@ export async function POST(req: Request) {
     // Generate title using AI
     const { text } = await generateText({
       model: selectedModel,
-      prompt: `Generate a concise title (max 50 characters) for a biomedical research chat conversation that starts with this message.
+      prompt: `Generate a concise title (max 50 characters) for a patent research chat conversation that starts with this message.
       The title should capture the main topic or question.
-      If it's about a specific drug, disease, or clinical trial, include it.
+      If it's about specific patents, technology areas, companies, or competitive intelligence, include it.
       Return ONLY the title, no quotes, no explanation.
 
       User message: "${message}"`,

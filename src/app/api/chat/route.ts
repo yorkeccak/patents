@@ -1,15 +1,9 @@
 import { streamText, convertToModelMessages } from "ai";
 import { getToolsForUser } from "@/lib/tools";
-import { BiomedUIMessage } from "@/lib/types";
+import { PatentUIMessage } from "@/lib/types";
 import { openai, createOpenAI } from "@ai-sdk/openai";
-import { createOllama, ollama } from "ollama-ai-provider-v2";
-import { checkAnonymousRateLimit, incrementRateLimit } from "@/lib/rate-limit";
-import { createClient } from '@supabase/supabase-js';
-import { checkUserRateLimit } from '@/lib/rate-limit';
-import { validateAccess } from '@/lib/polar-access-validation';
-import { getPolarTrackedModel } from '@/lib/polar-llm-strategy';
-import * as db from '@/lib/db';
 import { isDevelopmentMode } from '@/lib/local-db/local-auth';
+import * as db from '@/lib/db';
 import { saveChatMessages } from '@/lib/db';
 
 // 13mins max streaming (vercel limit)
@@ -17,132 +11,19 @@ export const maxDuration = 800;
 
 export async function POST(req: Request) {
   try {
-    const { messages, sessionId }: { messages: BiomedUIMessage[], sessionId?: string } = await req.json();
+    const { messages, sessionId, valyuAccessToken }: { messages: PatentUIMessage[], sessionId?: string, valyuAccessToken?: string } = await req.json();
     console.log("[Chat API] ========== NEW REQUEST ==========");
     console.log("[Chat API] Received sessionId:", sessionId);
     console.log("[Chat API] Number of messages:", messages.length);
-    // console.log(
-    //   "[Chat API] Incoming messages:",
-    //   JSON.stringify(messages, null, 2)
-    // );
+    console.log("[Chat API] Valyu OAuth token:", valyuAccessToken ? 'present' : 'not present');
 
-    // Determine if this is a user-initiated message (should count towards rate limit)
-    // ONLY increment for the very first user message in a conversation
-    // All tool calls, continuations, and follow-ups should NOT increment
-    const lastMessage = messages[messages.length - 1];
-    const isUserMessage = lastMessage?.role === 'user';
-    const userMessageCount = messages.filter(m => m.role === 'user').length;
-    
-    // Simple rule: Only increment if this is a user message AND it's the first user message
-    const isUserInitiated = isUserMessage && userMessageCount === 1;
-    
-    console.log("[Chat API] Rate limit check:", {
-      isUserMessage,
-      userMessageCount,
-      isUserInitiated,
-      totalMessages: messages.length
-    });
-
-    // Check app mode and configure accordingly
+    // Check app mode
     const isDevelopment = isDevelopmentMode();
     console.log("[Chat API] App mode:", isDevelopment ? 'development' : 'production');
 
-    // Get authenticated user (uses local auth in dev mode)
+    // Get authenticated user from Supabase (works in both dev and prod)
     const { data: { user } } = await db.getUser();
     console.log("[Chat API] Authenticated user:", user?.id || 'anonymous');
-
-    // Legacy Supabase clients (only used in production mode)
-    let supabaseAnon: any = null;
-    let supabase: any = null;
-
-    if (!isDevelopment) {
-      supabaseAnon = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          global: {
-            headers: {
-              Authorization: req.headers.get('Authorization') || '',
-            },
-          },
-        }
-      );
-
-      supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
-    }
-
-    // Validate access for authenticated users (simplified validation)
-    if (user && !isDevelopment) {
-      const accessValidation = await validateAccess(user.id);
-      
-      if (!accessValidation.hasAccess && accessValidation.requiresPaymentSetup) {
-        console.log("[Chat API] Access validation failed - payment required");
-        return new Response(
-          JSON.stringify({
-            error: "PAYMENT_REQUIRED",
-            message: "Payment method setup required",
-            tier: accessValidation.tier,
-            action: "setup_payment"
-          }),
-          { status: 402, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      if (accessValidation.hasAccess) {
-        console.log("[Chat API] Access validated for tier:", accessValidation.tier);
-      }
-    }
-
-    // Check rate limit for user-initiated messages
-    if (isUserInitiated && !isDevelopment) {
-      if (!user) {
-        // Fall back to anonymous rate limiting for non-authenticated users
-        const rateLimitStatus = await checkAnonymousRateLimit();
-        console.log("[Chat API] Anonymous rate limit status:", rateLimitStatus);
-        
-        if (!rateLimitStatus.allowed) {
-          console.log("[Chat API] Anonymous rate limit exceeded");
-          return new Response(
-            JSON.stringify({
-              error: "RATE_LIMIT_EXCEEDED",
-              message: "You have exceeded your daily limit of 5 queries. Sign up to continue.",
-              resetTime: rateLimitStatus.resetTime.toISOString(),
-              remaining: rateLimitStatus.remaining,
-            }),
-            {
-              status: 429,
-              headers: {
-                "Content-Type": "application/json",
-                "X-RateLimit-Limit": rateLimitStatus.limit.toString(),
-                "X-RateLimit-Remaining": rateLimitStatus.remaining.toString(),
-                "X-RateLimit-Reset": rateLimitStatus.resetTime.toISOString(),
-              },
-            }
-          );
-        }
-      } else {
-        // Check user-based rate limits
-        const rateLimitResult = await checkUserRateLimit(user.id);
-        console.log("[Chat API] User rate limit status:", rateLimitResult);
-        
-        if (!rateLimitResult.allowed) {
-          return new Response(JSON.stringify({
-            error: "RATE_LIMIT_EXCEEDED",
-            message: "Daily query limit reached. Upgrade to continue.",
-            resetTime: rateLimitResult.resetTime.toISOString(),
-            tier: rateLimitResult.tier
-          }), {
-            status: 429,
-            headers: { "Content-Type": "application/json" }
-          });
-        }
-      }
-    } else if (isUserInitiated && isDevelopment) {
-      console.log("[Chat API] Development mode: Rate limiting disabled");
-    }
 
     // Detect available API keys and select provider/tools accordingly
     const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
@@ -154,9 +35,9 @@ export async function POST(req: Request) {
     let supportsThinking = false;
 
     // Check if local models are enabled and which provider to use
-    const localEnabled = req.headers.get('x-ollama-enabled') !== 'false'; // Legacy header name
+    const localEnabled = req.headers.get('x-ollama-enabled') !== 'false';
     const localProvider = (req.headers.get('x-local-provider') as 'ollama' | 'lmstudio' | null) || 'ollama';
-    const userPreferredModel = req.headers.get('x-ollama-model'); // Works for both providers
+    const userPreferredModel = req.headers.get('x-ollama-model');
 
     // Models that support thinking/reasoning
     const thinkingModels = [
@@ -183,7 +64,6 @@ export async function POST(req: Request) {
 
           if (lmstudioResponse.ok) {
             const data = await lmstudioResponse.json();
-            // Filter out embedding models - only keep chat/LLM models
             const allModels = data.data.map((m: any) => ({ name: m.id })) || [];
             models = allModels.filter((m: any) =>
               !m.name.includes('embed') &&
@@ -213,14 +93,12 @@ export async function POST(req: Request) {
         }
 
         if (models.length > 0) {
-          // Prioritize reasoning models, then other capable models
           const preferredModels = [
-            'deepseek-r1', 'qwen3', 'phi4-reasoning', 'cogito', // Reasoning models
-            'llama3.1', 'gemma3:4b', 'gemma3', 'llama3.2', 'llama3', 'qwen2.5', 'codestral' // Regular models
+            'deepseek-r1', 'qwen3', 'phi4-reasoning', 'cogito',
+            'llama3.1', 'gemma3:4b', 'gemma3', 'llama3.2', 'llama3', 'qwen2.5', 'codestral'
           ];
           let selectedModelName = models[0].name;
 
-          // Try to find a preferred model
           if (userPreferredModel && models.some((m: any) => m.name === userPreferredModel)) {
             selectedModelName = userPreferredModel;
           } else {
@@ -232,108 +110,53 @@ export async function POST(req: Request) {
             }
           }
 
-          // Check if the selected model supports thinking
           supportsThinking = thinkingModels.some(thinkModel =>
             selectedModelName.toLowerCase().includes(thinkModel.toLowerCase())
           );
 
-          // Create OpenAI-compatible client
           const localProviderClient = createOpenAI({
             baseURL: baseURL,
-            apiKey: localProvider === 'lmstudio' ? 'lm-studio' : 'ollama', // Dummy API keys
+            apiKey: localProvider === 'lmstudio' ? 'lm-studio' : 'ollama',
           });
 
-          // Create a chat model explicitly
           selectedModel = localProviderClient.chat(selectedModelName);
           modelInfo = `${providerName} (${selectedModelName})${supportsThinking ? ' [Reasoning]' : ''} - Development Mode`;
         } else {
           throw new Error(`No models available in ${localProvider}`);
         }
       } catch (error) {
-        // Fallback to OpenAI in development mode
         console.error(`[Chat API] Local provider error (${localProvider}):`, error);
-        console.log('[Chat API] Headers received:', {
-          'x-ollama-enabled': req.headers.get('x-ollama-enabled'),
-          'x-local-provider': req.headers.get('x-local-provider'),
-          'x-ollama-model': req.headers.get('x-ollama-model')
-        });
         selectedModel = hasOpenAIKey ? openai("gpt-5.1") : "openai/gpt-5";
         modelInfo = hasOpenAIKey
           ? "OpenAI (gpt-5) - Development Mode Fallback"
           : 'Vercel AI Gateway ("gpt-5") - Development Mode Fallback';
       }
     } else {
-      // Production mode: Use Polar-wrapped OpenAI ONLY for pay-per-use users
-      if (user) {
-        // Get user subscription tier to determine billing approach
-        const { data: userData } = await db.getUserProfile(user.id);
-
-        const userTier = userData?.subscription_tier || userData?.subscriptionTier || 'free';
-        const isActive = (userData?.subscription_status || userData?.subscriptionStatus) === 'active';
-        
-        // Only use Polar LLM Strategy for pay-per-use users
-        if (isActive && userTier === 'pay_per_use') {
-          selectedModel = getPolarTrackedModel(user.id, "gpt-5");
-          modelInfo = "OpenAI (gpt-5) - Production Mode (Polar Tracked - Pay-per-use)";
-        } else {
-          // Unlimited users and free users use regular model (no per-token billing)
-          selectedModel = hasOpenAIKey ? openai("gpt-5") : "openai/gpt-5";
-          modelInfo = hasOpenAIKey
-            ? `OpenAI (gpt-5) - Production Mode (${userTier} tier - Flat Rate)`
-            : `Vercel AI Gateway ("gpt-5") - Production Mode (${userTier} tier - Flat Rate)`;
-        }
-      } else {
-        selectedModel = hasOpenAIKey ? openai("gpt-5") : "openai/gpt-5";
-        modelInfo = hasOpenAIKey
-          ? "OpenAI (gpt-5) - Production Mode (Anonymous)"
-          : 'Vercel AI Gateway ("gpt-5") - Production Mode (Anonymous)';
-      }
+      // Production mode: Use OpenAI
+      selectedModel = hasOpenAIKey ? openai("gpt-5") : "openai/gpt-5";
+      modelInfo = hasOpenAIKey
+        ? `OpenAI (gpt-5) - Production Mode (${user ? 'Valyu User' : 'Anonymous'})`
+        : `Vercel AI Gateway ("gpt-5") - Production Mode (${user ? 'Valyu User' : 'Anonymous'})`;
     }
 
     console.log("[Chat API] Model selected:", modelInfo);
 
-    // No need for usage tracker - Polar LLM Strategy handles everything automatically
-
-    // User tier is already determined above in model selection
-    let userTier = 'free';
-    if (user) {
-      const { data: userData } = await db.getUserProfile(user.id);
-      userTier = userData?.subscription_tier || userData?.subscriptionTier || 'free';
-      console.log("[Chat API] User tier:", userTier);
-    }
-
     // Track processing start time
     const processingStartTime = Date.now();
 
-    // Note: We don't save individual messages here anymore.
-    // The entire conversation is saved in onFinish callback after streaming completes.
-    // This follows the Vercel AI SDK v5 recommended pattern.
-
-    console.log(`[Chat API] About to call streamText with model:`, selectedModel);
-    console.log(`[Chat API] Model info:`, modelInfo);
-
-    // Build provider options conditionally based on whether we're using local providers
+    // Build provider options
     const isUsingLocalProvider = isDevelopment && localEnabled && (modelInfo.includes('Ollama') || modelInfo.includes('LM Studio'));
     const providerOptions: any = {};
 
     if (isUsingLocalProvider) {
-      // For local models using OpenAI compatibility layer
-      // We need to use the openai provider options since createOpenAI is used
       if (supportsThinking) {
-        // Enable thinking for reasoning models
-        providerOptions.openai = {
-          think: true
-        };
+        providerOptions.openai = { think: true };
         console.log(`[Chat API] Enabled thinking mode for ${localProvider} reasoning model`);
       } else {
-        // Explicitly disable thinking for non-reasoning models
-        providerOptions.openai = {
-          think: false
-        };
+        providerOptions.openai = { think: false };
         console.log(`[Chat API] Disabled thinking mode for ${localProvider} non-reasoning model`);
       }
     } else {
-      // OpenAI-specific options (only when using OpenAI)
       providerOptions.openai = {
         store: true,
         reasoningEffort: 'medium',
@@ -349,12 +172,11 @@ export async function POST(req: Request) {
       if (lastMessage.role === 'user') {
         const { randomUUID } = await import('crypto');
         const userMessageToSave = {
-          id: randomUUID(), // Generate proper UUID instead of using AI SDK's short ID
+          id: randomUUID(),
           role: 'user' as const,
           content: lastMessage.parts || [],
         };
 
-        // Get existing messages first
         const { data: existingMessages } = await db.getChatMessages(sessionId);
         const allMessages = [...(existingMessages || []), userMessageToSave];
 
@@ -364,7 +186,6 @@ export async function POST(req: Request) {
           content: typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content,
         })));
 
-        // Update session timestamp
         await db.updateChatSession(sessionId, user.id, {
           last_message_at: new Date()
         });
@@ -382,11 +203,10 @@ export async function POST(req: Request) {
       toolChoice: "auto",
       experimental_context: {
         userId: user?.id,
-        userTier,
         sessionId,
+        valyuAccessToken,
       },
       providerOptions,
-      // DON'T pass abortSignal - we want the stream to continue even if user switches tabs
       system: `You are a helpful patent research assistant with access to comprehensive tools for patent search, Python code execution, data visualization, and analysis.
 
       **Today's Date:** ${new Date().toISOString().split('T')[0]}
@@ -452,7 +272,7 @@ export async function POST(req: Request) {
       - For complex queries spanning multiple topics, prioritize the most important searches first
 
       CRITICAL CITATION INSTRUCTIONS:
-      When you use ANY search tool (clinical trials, drug information, biomedical literature, or web search) and reference information from the results in your response:
+      When you use ANY search tool (patent search or web search) and reference information from the results in your response:
 
       1. **Citation Format**: Use square brackets [1], [2], [3], etc.
       2. **Citation Placement**: ONLY place citations at the END of sentences where you reference the information - NEVER at the beginning
@@ -469,80 +289,62 @@ export async function POST(req: Request) {
       - For bullet points in lists, place citations at the end of each bullet point if needed
 
       Example of PROPER citation usage:
-      "Pembrolizumab demonstrated an overall response rate of 45% in NSCLC patients with PD-L1 expression >50% [1]. Median progression-free survival reached 10.3 months, exceeding historical controls [1][2]. Grade 3-4 immune-related adverse events occurred in 17% of patients [3]. These results demonstrate pembrolizumab's strong efficacy profile across multiple endpoints [1][2][3]."
+      "The patent describes a transformer architecture for protein structure prediction using attention mechanisms [1]. The claims cover both the encoder and decoder components [1][2]. Similar approaches have been disclosed in related filings from DeepMind [3]. This patent family demonstrates significant innovation in the computational biology space [1][2][3]."
 
       Example of WRONG citation usage (DO NOT DO THIS):
-      "[1] Pembrolizumab demonstrated an ORR of 45% [1]. [2] The median PFS reached 10.3 months [2]."
-      
+      "[1] The patent describes a transformer architecture [1]. [2] The claims cover encoder components [2]."
+
       You can:
 
-         - Execute Python code for pharmacokinetic modeling, statistical analysis, data visualization, and complex calculations using the codeExecution tool (runs in a secure Daytona Sandbox)
-         - The Python environment can install packages via pip at runtime inside the sandbox (e.g., numpy, pandas, scipy, scikit-learn, biopython)
+         - Execute Python code for patent analytics, statistical analysis, data visualization, and complex calculations using the codeExecution tool (runs in a secure Daytona Sandbox)
+         - The Python environment can install packages via pip at runtime inside the sandbox (e.g., numpy, pandas, scipy, scikit-learn)
          - Visualization libraries (matplotlib, seaborn, plotly) may work inside Daytona. However, by default, prefer the built-in chart creation tool for standard time series and comparisons. Use Daytona for advanced or custom visualizations only when necessary.
-         - Search for clinical trials data using the clinical trials search tool (ClinicalTrials.gov data, trial phases, endpoints, patient populations)
-         - Search FDA drug labels using the drug information search tool (DailyMed data, contraindications, dosing, interactions, warnings)
-         - Search biomedical literature using the biomedical literature search tool (PubMed articles, ArXiv papers, peer-reviewed research)
+         - Search patents using the patent search tool (USPTO, EPO, PCT patents with full text, claims, abstracts)
          - Search the web for general information using the web search tool (any topic with relevance scoring and cost control)
          - Create interactive charts and visualizations using the chart creation tool:
-           • Line charts: Time series trends (survival curves, drug concentrations over time)
-           • Bar charts: Categorical comparisons (response rates, adverse event frequencies)
-           • Area charts: Cumulative data (patient enrollment, event-free survival)
-           • Scatter/Bubble charts: Correlation analysis, biomarker expression, dose-response relationships
-           • Quadrant charts: 2x2 clinical matrices (efficacy vs safety, risk-benefit analysis)
+           • Line charts: Time series trends (patent filing trends over time)
+           • Bar charts: Categorical comparisons (patents by assignee, technology areas)
+           • Area charts: Cumulative data (portfolio growth over time)
+           • Scatter/Bubble charts: Correlation analysis, citation networks
+           • Quadrant charts: 2x2 matrices (innovation vs market positioning)
 
       **CRITICAL NOTE**: You must only make max 5 parallel tool calls at a time.
 
       **CRITICAL INSTRUCTIONS**: Your reports must be incredibly thorough and detailed, explore everything that is relevant to the user's query that will help to provide
-      the perfect response that is of a level expected of an elite level senior biomedical researcher at a leading pharmaceutical research institution.
+      the perfect response that is of a level expected of an elite level senior patent researcher at a leading intellectual property firm.
 
-      For clinical trials searches, you can access:
-      • Trial registration data from ClinicalTrials.gov
-      • Phase I, II, III, and IV study information
-      • Primary and secondary endpoints
-      • Patient inclusion/exclusion criteria
-      • Study sponsors and principal investigators
-      • Results and outcome measures
+      For patent searches, you can access:
+      • USPTO granted patents and applications (12M+ full-text patents)
+      • EPO (European Patent Office) filings
+      • PCT (Patent Cooperation Treaty) international applications
+      • Patent claims, abstracts, and full specifications
+      • Citation networks and patent families
+      • Assignee and inventor information
 
-      For drug information searches, you can access:
-      • FDA-approved drug labels from DailyMed
-      • Indications and usage
-      • Dosage and administration
-      • Contraindications and warnings
-      • Drug interactions and adverse reactions
-      • Pharmacokinetics and pharmacodynamics
-
-      For biomedical literature searches, you can access:
-      • PubMed indexed journal articles
-      • ArXiv preprints in quantitative biology and bioinformatics
-      • Peer-reviewed research papers
-      • Clinical study results and meta-analyses
-      • Mechanism of action studies
-      • Preclinical and translational research
-      
-               For web searches, you can find information on:
+      For web searches, you can find information on:
          • Current events and news from any topic
          • Research topics with high relevance scoring
          • Educational content and explanations
          • Technology trends and developments
          • General knowledge across all domains
-         
+
          For data visualization, you can create charts when users want to:
-         • Compare multiple drugs, treatments, or clinical outcomes (line/bar charts)
-         • Visualize trends over time (line/area charts for survival curves, drug concentrations)
-         • Display patient response rates or adverse event frequencies (bar charts)
-         • Show relationships between biomarkers and outcomes (scatter charts for correlation)
-         • Map efficacy vs safety positioning (scatter charts for drug comparison)
-         • Create 2x2 clinical matrices (quadrant charts for risk-benefit, efficacy-safety analysis)
-         • Present clinical data in an easy-to-understand visual format
+         • Compare patent portfolios across companies or technology areas (line/bar charts)
+         • Visualize filing trends over time (line/area charts for patent activity)
+         • Display patent counts by assignee or technology category (bar charts)
+         • Show relationships between citation counts and filing dates (scatter charts)
+         • Map innovation positioning (scatter charts for competitive analysis)
+         • Create 2x2 matrices (quadrant charts for technology vs market analysis)
+         • Present patent data in an easy-to-understand visual format
 
          **Chart Type Selection Guidelines**:
-         • Use LINE charts for time series trends (drug concentrations over time, survival curves, response rates)
-         • Use BAR charts for categorical comparisons (response rates by treatment, adverse event frequencies)
-         • Use AREA charts for cumulative data (patient enrollment, event-free survival)
-         • Use SCATTER charts for correlation, biomarker analysis, or bubble charts with size representing patient population
-         • Use QUADRANT charts for 2x2 clinical analysis (divides chart into 4 quadrants with reference lines for efficacy-safety matrices)
+         • Use LINE charts for time series trends (patent filings over time, citation growth)
+         • Use BAR charts for categorical comparisons (patents by assignee, technology breakdown)
+         • Use AREA charts for cumulative data (portfolio growth, cumulative filings)
+         • Use SCATTER charts for correlation or bubble charts with size representing patent family size
+         • Use QUADRANT charts for 2x2 analysis (divides chart into 4 quadrants for competitive positioning)
 
-         Whenever you have time series data for the user (such as drug concentrations, survival data, or any clinical metrics over time), always visualize it using the chart creation tool. For scatter/quadrant charts, each series represents a treatment group or drug (for color coding), and each data point represents an individual study or measurement with x, y, optional size (for patient n), and optional label (drug/study name).
+         Whenever you have time series data for the user (such as patent filing trends or citation data over time), always visualize it using the chart creation tool. For scatter/quadrant charts, each series represents a company or technology area (for color coding), and each data point represents an individual patent or portfolio metric with x, y, optional size (for family size), and optional label (assignee/patent name).
 
          CRITICAL: When using the createChart tool, you MUST format the dataSeries exactly like this:
          dataSeries: [
@@ -555,7 +357,7 @@ export async function POST(req: Request) {
              ]
            }
          ]
-         
+
          Each data point requires an x field (date/label) and y field (numeric value). Do NOT use other formats like "datasets" or "labels" - only use the dataSeries format shown above.
 
          CRITICAL CHART EMBEDDING REQUIREMENTS:
@@ -569,29 +371,29 @@ export async function POST(req: Request) {
          - Professional reports always integrate visual data with written analysis
 
          Example of proper chart embedding in a response:
-         "Pembrolizumab demonstrated remarkable efficacy in NSCLC patients with high PD-L1 expression, with response rates improving significantly over the treatment period. The median progression-free survival exceeded historical controls, while maintaining an acceptable safety profile across all treatment cohorts.
+         "Tesla's patent portfolio shows significant growth in battery technology, with filings increasing substantially over the analysis period. The company leads competitors in solid-state battery innovations, while maintaining strong positions in thermal management and cell chemistry.
 
-         ![Pembrolizumab Response Rates Over Time](/api/charts/abc-123-def/image)
+         ![Tesla Patent Filing Trends](/api/charts/abc-123-def/image)
 
-         This efficacy trajectory demonstrates pembrolizumab's sustained clinical benefit throughout the treatment duration..."
+         This filing trajectory demonstrates Tesla's sustained R&D investment in battery technology..."
 
          When creating charts:
-         • Use line charts for time series data (survival curves, drug concentrations over time)
-         • Use bar charts for comparisons between categories (response rates by treatment, adverse event frequencies)
-         • Use area charts for cumulative data or when showing patient enrollment composition
+         • Use line charts for time series data (patent filings over time, citation trends)
+         • Use bar charts for comparisons between categories (patents by assignee, technology areas)
+         • Use area charts for cumulative data or when showing portfolio composition
          • Always provide meaningful titles and axis labels
-         • Support multiple data series when comparing related metrics (different treatment arms, multiple drugs)
+         • Support multiple data series when comparing related metrics (different companies, technology areas)
          • Colors are automatically assigned - focus on data structure and meaningful labels
 
-               Always use the appropriate tools when users ask for calculations, Python code execution, biomedical data, web queries, or data visualization.
-         Choose the codeExecution tool for any mathematical calculations, pharmacokinetic modeling, statistical analysis, data computations, or when users need to run Python code.
-         
+               Always use the appropriate tools when users ask for calculations, Python code execution, patent data, web queries, or data visualization.
+         Choose the codeExecution tool for any mathematical calculations, patent analytics, statistical analysis, data computations, or when users need to run Python code.
+
          CRITICAL: WHEN TO USE codeExecution TOOL:
          - ALWAYS use codeExecution when the user asks you to "calculate", "compute", "use Python", or "show Python code"
          - NEVER just display Python code as text - you MUST execute it using the codeExecution tool
          - If the user asks for calculations with Python, USE THE TOOL, don't just show code
          - Mathematical formulas should be explained with LaTeX, but calculations MUST use codeExecution
-         
+
          CRITICAL PYTHON CODE REQUIREMENTS:
          1. ALWAYS include print() statements - Python code without print() produces no visible output
          2. Use descriptive labels and proper formatting in your print statements
@@ -601,10 +403,10 @@ export async function POST(req: Request) {
          6. Always calculate intermediate values before printing final results
           7. Available libraries: You may install and use packages in the Daytona sandbox (e.g., numpy, pandas, scikit-learn). Prefer the chart creation tool for visuals unless an advanced/custom visualization is required.
           8. Visualization guidance: Prefer the chart creation tool for most charts. Use Daytona-rendered plots only for complex, bespoke visualizations that the chart tool cannot represent.
-         
+
           REQUIRED: Every Python script must end with print() statements that show the calculated results with proper labels, units, and formatting. Never just write variable names or expressions without print() - they will not display anything to the user.
           If generating advanced charts with Daytona (e.g., matplotlib), ensure the code renders the figure (e.g., plt.show()) so artifacts can be captured.
-         
+
          ERROR RECOVERY: If any tool call fails due to validation errors, you will receive an error message explaining what went wrong. When this happens:
          1. Read the error message carefully to understand what fields are missing or incorrect
          2. Correct the tool call by providing ALL required fields with proper values
@@ -612,27 +414,25 @@ export async function POST(req: Request) {
          4. For codeExecution tool errors, ensure your code includes proper print() statements
          5. Try the corrected tool call immediately - don't ask the user for clarification
          6. If multiple fields are missing, fix ALL of them in your retry attempt
-         
-                  When explaining mathematical concepts, formulas, or pharmacokinetic calculations, ALWAYS use LaTeX notation for clear mathematical expressions:
+
+                  When explaining mathematical concepts, formulas, or patent analytics calculations, ALWAYS use LaTeX notation for clear mathematical expressions:
 
          CRITICAL: ALWAYS wrap ALL mathematical expressions in <math>...</math> tags:
          - For inline math: <math>C(t) = C_0 \cdot e^{-kt}</math>
-         - For fractions: <math>\frac{Cl}{V_d} = \frac{0.693}{t_{1/2}}</math>
-         - For exponents: <math>e^{-kt}</math>
-         - For complex formulas: <math>AUC = \frac{Dose}{Cl} \times \left(1 + \frac{ka}{ke - ka}\right)</math>
+         - For fractions: <math>\frac{citations}{patents} = \frac{total\_cites}{family\_size}</math>
+         - For exponents: <math>growth = e^{rt}</math>
+         - For complex formulas: <math>H\text{-}index = max(i : citations_i \geq i)</math>
 
-         NEVER write LaTeX code directly in text like \frac{Cl}{V_d} or \times - it must be inside <math> tags.
+         NEVER write LaTeX code directly in text like \frac{a}{b} or \times - it must be inside <math> tags.
          NEVER use $ or $$ delimiters - only use <math>...</math> tags.
-         This makes pharmacokinetic and statistical formulas much more readable and professional.
-         Choose the clinical trials search tool specifically for ClinicalTrials.gov data, trial phases, endpoints, and study results.
-         Choose the drug information search tool for FDA drug labels, contraindications, dosing, and drug interactions.
-         Choose the biomedical literature search tool for PubMed articles, academic research, peer-reviewed studies, mechanism of action papers, and scientific publications.
-         Choose the web search tool for general topics, current events, medical news, and non-specialized information.
-         Choose the chart creation tool when users want to visualize data, compare drugs, or see trends over time.
+         This makes patent analytics and statistical formulas much more readable and professional.
+         Choose the patent search tool for USPTO, EPO, PCT patents, prior art, and competitive intelligence.
+         Choose the web search tool for general topics, current events, technology news, and non-patent information.
+         Choose the chart creation tool when users want to visualize data, compare portfolios, or see trends over time.
 
-         When users ask for charts or data visualization, or when you have clinical time series data:
-         1. First gather the necessary data (using clinical trials, drug info, or literature search if needed)
-         2. Then create an appropriate chart with that data (always visualize time series data like survival curves, drug concentrations)
+         When users ask for charts or data visualization, or when you have patent time series data:
+         1. First gather the necessary data (using patent search or web search if needed)
+         2. Then create an appropriate chart with that data (always visualize time series data like filing trends, citation growth)
          3. Ensure the chart has a clear title, proper axis labels, and meaningful data series names
          4. Colors are automatically assigned for optimal visual distinction
 
@@ -651,14 +451,14 @@ export async function POST(req: Request) {
       - Always continue until you have completed all required tool calls and provided a summary or visualization if appropriate.
       - NEVER just show Python code as text - if the user wants calculations or Python code, you MUST use the codeExecution tool to run it
       - When users say "calculate", "compute", or mention Python code, this is a COMMAND to use the codeExecution tool, not a request to see code
-      - NEVER suggest using Python to fetch data from the internet or APIs. All data retrieval must be done via the clinicalTrialsSearch, drugInformationSearch, biomedicalLiteratureSearch, or webSearch tools.
+      - NEVER suggest using Python to fetch data from the internet or APIs. All data retrieval must be done via the patentSearch or webSearch tools.
       - Remember: The Python environment runs in the cloud with NumPy, pandas, and scikit-learn available, but NO visualization libraries.
-      
+
       CRITICAL WORKFLOW ORDER:
       1. First: Complete ALL data gathering (searches, calculations, etc.)
       2. Then: Create ALL charts/visualizations based on the gathered data
       3. Finally: Present your final formatted response with analysis
-      
+
       This ensures charts appear immediately before your analysis and are not lost among tool calls.
       ---
 
@@ -667,25 +467,25 @@ export async function POST(req: Request) {
       When presenting your final response to the user, you MUST format the information in an extremely well-organized and visually appealing way:
 
       1. **Use Rich Markdown Formatting:**
-         - Use tables for comparative data, clinical outcomes, and any structured information
+         - Use tables for comparative data, patent metrics, and any structured information
          - Use bullet points and numbered lists appropriately
-         - Use **bold** for key metrics and important values (response rates, survival data, p-values)
+         - Use **bold** for key metrics and important values (patent counts, citation rates, filing trends)
          - Use headers (##, ###) to organize sections clearly
          - Use blockquotes (>) for key insights or summaries
 
-      2. **Tables for Clinical Data:**
-         - Present efficacy, safety, pharmacokinetic, and trial outcome data in markdown tables
-         - Format numbers with proper separators and units (e.g., 10.3 months, 45% ORR)
-         - Include statistical significance and comparisons
+      2. **Tables for Patent Data:**
+         - Present patent portfolio, citation, and technology landscape data in markdown tables
+         - Format numbers with proper separators and units (e.g., 2,456 patents, 85% grant rate)
+         - Include comparative metrics and rankings
          - Example:
-         | Endpoint | Pembrolizumab | Chemotherapy | p-value |
-         |----------|---------------|--------------|---------|
-         | ORR | 45% | 28% | <0.001 |
-         | mPFS | 10.3 mo | 6.0 mo | <0.001 |
+         | Company | Total Patents | Avg Citations | Grant Rate | Top CPC |
+         |---------|---------------|---------------|------------|---------|
+         | Google | 2,456 | 18.7 | 82% | G06N3/08 |
+         | Microsoft | 2,103 | 15.2 | 79% | G06N5/00 |
 
       3. **Mathematical Formulas:**
          - Always use <math> tags for any mathematical expressions
-         - Present pharmacokinetic and statistical calculations clearly with proper notation
+         - Present patent analytics and statistical calculations clearly with proper notation
 
       4. **Data Organization:**
          - Group related information together
@@ -715,7 +515,7 @@ export async function POST(req: Request) {
            c) You're showing an alternative approach
          - Reference the executed results instead of repeating the code
 
-      Remember: The goal is to present ALL retrieved data and facts in the most professional, readable, and visually appealing format possible. Think of it as creating a professional biomedical research report or clinical study presentation.
+      Remember: The goal is to present ALL retrieved data and facts in the most professional, readable, and visually appealing format possible. Think of it as creating a professional patent research report or IP intelligence presentation.
 
       8. **Citation Requirements:**
          - ALWAYS cite sources when using information from search results
@@ -725,30 +525,24 @@ export async function POST(req: Request) {
          - Maintain consistent numbering throughout your response
          - Each unique search result gets ONE citation number used consistently
          - Citations are MANDATORY for:
-           • Specific numbers, statistics, percentages (response rates, survival data, p-values)
-           • Clinical trial results and endpoints
-           • Quotes or paraphrased statements from papers
-           • Drug efficacy and safety data
+           • Specific numbers, statistics, percentages (patent counts, citation metrics, filing trends)
+           • Patent claims, abstracts, and technical descriptions
+           • Quotes or paraphrased statements from patents
+           • Competitive intelligence and portfolio analysis data
            • Any factual claims from search results
       ---
       `,
     });
-
-    // Log streamText result object type
-    console.log("[Chat API] streamText result type:", typeof result);
-    console.log("[Chat API] streamText result:", result);
 
     // Create the streaming response with chat persistence
     const streamResponse = result.toUIMessageStreamResponse({
       sendReasoning: true,
       originalMessages: messages,
       onFinish: async ({ messages: allMessages }) => {
-        // Calculate processing time
         const processingEndTime = Date.now();
         const processingTimeMs = processingEndTime - processingStartTime;
         console.log('[Chat API] Processing completed in', processingTimeMs, 'ms');
 
-        // Save all messages to database
         console.log('[Chat API] onFinish called - user:', !!user, 'sessionId:', sessionId);
         console.log('[Chat API] Total messages in conversation:', allMessages.length);
         console.log('[Chat API] Will save messages:', !!(user && sessionId));
@@ -756,17 +550,13 @@ export async function POST(req: Request) {
         if (user && sessionId) {
           console.log('[Chat API] Saving messages to session:', sessionId);
 
-          // The correct pattern: Save ALL messages from the conversation
-          // This replaces all messages in the session with the complete, up-to-date conversation
           const { randomUUID } = await import('crypto');
           const messagesToSave = allMessages.map((message: any, index: number) => {
-            // AI SDK v5 uses 'parts' array for UIMessage
             let contentToSave = [];
 
             if (message.parts && Array.isArray(message.parts)) {
               contentToSave = message.parts;
             } else if (message.content) {
-              // Fallback for older format
               if (typeof message.content === 'string') {
                 contentToSave = [{ type: 'text', text: message.content }];
               } else if (Array.isArray(message.content)) {
@@ -777,7 +567,7 @@ export async function POST(req: Request) {
             return {
               id: message.id && message.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
                 ? message.id
-                : randomUUID(), // Generate UUID if message.id is not a valid UUID
+                : randomUUID(),
               role: message.role,
               content: contentToSave,
               processing_time_ms:
@@ -795,7 +585,6 @@ export async function POST(req: Request) {
           } else {
             console.log('[Chat API] Successfully saved', messagesToSave.length, 'messages to session:', sessionId);
 
-            // Update session's last_message_at timestamp
             const updateResult = await db.updateChatSession(sessionId, user.id, {
               last_message_at: new Date()
             });
@@ -808,59 +597,32 @@ export async function POST(req: Request) {
         } else {
           console.log('[Chat API] Skipping message save - user:', !!user, 'sessionId:', sessionId);
         }
-
-        // No manual usage tracking needed - Polar LLM Strategy handles this automatically!
-        console.log('[Chat API] AI usage automatically tracked by Polar LLM Strategy');
       }
     });
 
-    // Increment rate limit after successful validation but before processing
-    if (isUserInitiated && !isDevelopment) {
-      console.log("[Chat API] Incrementing rate limit for user-initiated message");
-      try {
-        if (user) {
-          // Only increment server-side for authenticated users
-          const rateLimitResult = await incrementRateLimit(user.id);
-          console.log("[Chat API] Authenticated user rate limit incremented:", rateLimitResult);
-        } else {
-          // Anonymous users handle increment client-side via useRateLimit hook
-          console.log("[Chat API] Skipping server-side increment for anonymous user (handled client-side)");
-        }
-      } catch (error) {
-        console.error("[Chat API] Failed to increment rate limit:", error);
-        // Continue with processing even if increment fails
-      }
-    }
-    
     if (isDevelopment) {
-      // Add development mode headers
       streamResponse.headers.set("X-Development-Mode", "true");
-      streamResponse.headers.set("X-RateLimit-Limit", "unlimited");
-      streamResponse.headers.set("X-RateLimit-Remaining", "unlimited");
     }
 
-    // Add headers to prevent connection drops when tab is backgrounded
+    // Add headers to prevent connection drops
     streamResponse.headers.set("Connection", "keep-alive");
-    streamResponse.headers.set("X-Accel-Buffering", "no"); // Disable buffering for nginx
-    streamResponse.headers.set("Cache-Control", "no-cache, no-transform"); // Prevent caching that might break streaming
+    streamResponse.headers.set("X-Accel-Buffering", "no");
+    streamResponse.headers.set("Cache-Control", "no-cache, no-transform");
 
     return streamResponse;
   } catch (error) {
     console.error("[Chat API] Error:", error);
 
-    // Extract meaningful error message
     const errorMessage = error instanceof Error
       ? error.message
       : typeof error === 'string'
         ? error
         : 'An unexpected error occurred';
 
-    // Check if it's a tool/function calling compatibility error
     const isToolError = errorMessage.toLowerCase().includes('tool') ||
                        errorMessage.toLowerCase().includes('function');
     const isThinkingError = errorMessage.toLowerCase().includes('thinking');
 
-    // Log full error details for debugging
     console.error("[Chat API] Error details:", {
       message: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
@@ -869,7 +631,6 @@ export async function POST(req: Request) {
       isThinkingError
     });
 
-    // Return specific error codes for compatibility issues
     if (isToolError || isThinkingError) {
       return new Response(
         JSON.stringify({
@@ -897,4 +658,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

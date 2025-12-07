@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import puppeteer, { Browser } from 'puppeteer';
 import { createClient } from '@/utils/supabase/server';
 import { buildPdfHtmlTemplate } from '@/lib/pdf-utils';
-import { cleanBiomedicalText, preprocessMarkdownText } from '@/lib/markdown-utils';
+import { cleanPatentText, preprocessMarkdownText } from '@/lib/markdown-utils';
 import { Citation } from '@/lib/citation-utils';
 import { csvToMarkdownTable, formatCsvForMarkdown, CSVData } from '@/lib/csv-utils';
 import * as fs from 'fs';
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     console.log('[PDF Generation] Found', csvIds.length, 'CSV tables to render');
 
     // Step 4: Preprocess markdown
-    const processedMarkdown = preprocessMarkdownText(cleanBiomedicalText(markdownContent));
+    const processedMarkdown = preprocessMarkdownText(cleanPatentText(markdownContent));
 
     // Replace chart markdown with placeholders
     let markdownWithPlaceholders = processedMarkdown;

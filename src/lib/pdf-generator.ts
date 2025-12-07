@@ -14,14 +14,14 @@ export interface PDFGenerationOptions {
 
 /**
  * Generates a PDF from chat messages
- * Implements clean, professional formatting for biomedical research reports
+ * Implements clean, professional formatting for patent research reports
  */
 export async function generateChatPDF(
   messages: PDFMessage[],
   options: PDFGenerationOptions = {}
 ): Promise<void> {
   const {
-    title = 'Bio Research Report',
+    title = 'Patent Research Report',
     includeTimestamp = true,
     includeCitations = true,
   } = options;
@@ -157,7 +157,7 @@ export async function generateChatPDF(
 
   // Generate filename with timestamp
   const timestamp = new Date().toISOString().split('T')[0];
-  const filename = `biomed-research-${timestamp}.pdf`;
+  const filename = `patent-research-${timestamp}.pdf`;
 
   // Download the PDF
   pdf.save(filename);

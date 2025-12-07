@@ -7,7 +7,7 @@ import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
-import { BiomedUIMessage } from "@/lib/types";
+import { PatentUIMessage } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -70,7 +70,7 @@ import {
 import { Streamdown } from "streamdown";
 import "katex/dist/katex.min.css";
 import katex from "katex";
-import { BiomedicalChart } from "@/components/financial-chart";
+import { PatentChart } from "@/components/financial-chart";
 import { CSVPreview } from "@/components/csv-preview";
 import { CitationTextRenderer } from "@/components/citation-text-renderer";
 import { CitationMap } from "@/lib/citation-utils";
@@ -367,7 +367,7 @@ const ChartImageRendererComponent = ({ chartId, alt }: { chartId: string; alt?: 
 
   return (
     <span className="block w-full my-4">
-      <BiomedicalChart {...chartData} key={chartId} />
+      <PatentChart {...chartData} key={chartId} />
     </span>
   );
 };
@@ -394,7 +394,7 @@ const MemoizedChartResult = memo(function MemoizedChartResult({
 }) {
   return (
     <div className="border border-border rounded-lg overflow-hidden">
-      <BiomedicalChart {...chartData} />
+      <PatentChart {...chartData} />
     </div>
   );
 }, (prevProps, nextProps) => {
@@ -700,15 +700,9 @@ const MemoizedTextPartWithCitations = memo(
         // Live: p.type = "tool-patentSearch", Saved: p.type = "tool-result" with toolName
         const isSearchTool =
           p.type === "tool-patentSearch" ||
-          p.type === "tool-clinicalTrialsSearch" ||
-          p.type === "tool-drugInformationSearch" ||
-          p.type === "tool-biomedicalLiteratureSearch" ||
           p.type === "tool-webSearch" ||
           (p.type === "tool-result" && (
             p.toolName === "patentSearch" ||
-            p.toolName === "clinicalTrialsSearch" ||
-            p.toolName === "drugInformationSearch" ||
-            p.toolName === "biomedicalLiteratureSearch" ||
             p.toolName === "webSearch"
           ));
 
@@ -740,12 +734,6 @@ const MemoizedTextPartWithCitations = memo(
                     toolType:
                       p.type === "tool-patentSearch" || p.toolName === "patentSearch"
                         ? "patent"
-                        : p.type === "tool-clinicalTrialsSearch" || p.toolName === "clinicalTrialsSearch"
-                        ? "clinical"
-                        : p.type === "tool-drugInformationSearch" || p.toolName === "drugInformationSearch"
-                        ? "drug"
-                        : p.type === "tool-biomedicalLiteratureSearch" || p.toolName === "biomedicalLiteratureSearch"
-                        ? "literature"
                         : "web",
                   },
                 ];
@@ -765,15 +753,9 @@ const MemoizedTextPartWithCitations = memo(
 
           const isSearchTool =
             p.type === "tool-patentSearch" ||
-            p.type === "tool-clinicalTrialsSearch" ||
-            p.type === "tool-drugInformationSearch" ||
-            p.type === "tool-biomedicalLiteratureSearch" ||
             p.type === "tool-webSearch" ||
             (p.type === "tool-result" && (
               p.toolName === "patentSearch" ||
-              p.toolName === "clinicalTrialsSearch" ||
-              p.toolName === "drugInformationSearch" ||
-              p.toolName === "biomedicalLiteratureSearch" ||
               p.toolName === "webSearch"
             ));
 
@@ -804,12 +786,6 @@ const MemoizedTextPartWithCitations = memo(
                       toolType:
                         p.type === "tool-patentSearch" || p.toolName === "patentSearch"
                           ? "patent"
-                          : p.type === "tool-clinicalTrialsSearch" || p.toolName === "clinicalTrialsSearch"
-                          ? "clinical"
-                          : p.type === "tool-drugInformationSearch" || p.toolName === "drugInformationSearch"
-                          ? "drug"
-                          : p.type === "tool-biomedicalLiteratureSearch" || p.toolName === "biomedicalLiteratureSearch"
-                          ? "literature"
                           : "web",
                     },
                   ];
@@ -907,7 +883,7 @@ const SearchResultCard = ({
   type,
 }: {
   result: any;
-  type: "clinical" | "drug" | "literature" | "web" | "patent";
+  type: "web" | "patent";
 }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -954,18 +930,6 @@ const SearchResultCard = ({
                       alt="USPTO"
                       className="w-full h-full object-contain"
                     />
-                  </div>
-                ) : type === "literature" ? (
-                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
-                    <BookOpen className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                ) : type === "drug" ? (
-                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
-                    <Search className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                ) : type === "clinical" ? (
-                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
-                    <Search className="w-3.5 h-3.5 text-primary" />
                   </div>
                 ) : (
                   <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
@@ -1050,18 +1014,6 @@ const SearchResultCard = ({
                       className="w-full h-full object-contain"
                     />
                   </div>
-                ) : type === "literature" ? (
-                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
-                    <BookOpen className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                ) : type === "drug" ? (
-                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
-                    <Search className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                ) : type === "clinical" ? (
-                  <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
-                    <Search className="w-3.5 h-3.5 text-primary" />
-                  </div>
                 ) : (
                   <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden">
                     <Favicon
@@ -1132,27 +1084,7 @@ const SearchResultCard = ({
                   {(result.relevanceScore * 100).toFixed(0)}% relevance
                 </span>
               )}
-              {type === "literature" && result.doi && (
-                <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-                  DOI: {result.doi}
-                </span>
-              )}
             </div>
-
-            {type === "literature" && (result.authors || result.citation) && (
-              <div className="space-y-1">
-                {result.authors && result.authors.length > 0 && (
-                  <div className="text-xs text-muted-foreground">
-                    <span className="font-medium">Authors:</span> {result.authors.join(", ")}
-                  </div>
-                )}
-                {result.citation && (
-                  <div className="text-xs text-muted-foreground font-mono bg-muted p-1 rounded">
-                    {result.citation}
-                  </div>
-                )}
-              </div>
-            )}
 
             {result.url && (
               <a
@@ -1283,7 +1215,7 @@ const SearchResultsCarousel = memo(function SearchResultsCarousel({
   type,
 }: {
   results: any[];
-  type: "clinical" | "drug" | "literature" | "web" | "patent";
+  type: "web" | "patent";
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const imagesScrollRef = useRef<HTMLDivElement>(null);
@@ -1677,6 +1609,7 @@ export function ChatInterface({
 
   const { selectedModel, selectedProvider } = useLocalProvider();
   const user = useAuthStore((state) => state.user);
+  const getValyuAccessToken = useAuthStore((state) => state.getValyuAccessToken);
   const subscription = useSubscription();
 
   // Auth modal state for paywalls
@@ -1696,75 +1629,70 @@ export function ChatInterface({
   const generateSessionTitle = useCallback((firstMessage: string): string => {
     // Create a smart title from the first user message
     const cleaned = firstMessage.trim();
-    
-    // Biomedical keywords to prioritize in titles
-    const biomedKeywords = [
-      'drug', 'drugs', 'medication', 'clinical', 'trial', 'trials', 'study', 'studies',
-      'patient', 'patients', 'disease', 'therapy', 'treatment', 'diagnosis', 'cancer',
-      'covid', 'virus', 'vaccine', 'antibody', 'protein', 'gene', 'crispr', 'genome',
-      'fda', 'approval', 'phase', 'efficacy', 'safety', 'adverse', 'pubmed', 'research',
-      'molecular', 'cellular', 'pathology', 'pharmacology', 'immunotherapy', 'biomarker'
+
+    // Patent-related keywords to prioritize in titles
+    const patentKeywords = [
+      'patent', 'patents', 'prior art', 'claims', 'fto', 'freedom to operate',
+      'infringement', 'novelty', 'assignee', 'inventor', 'filing', 'application',
+      'USPTO', 'EPO', 'PCT', 'granted', 'pending', 'expired', 'citation', 'citations',
+      'portfolio', 'competitive', 'landscape', 'technology', 'CPC', 'IPC', 'classification',
+      'prosecution', 'litigation', 'licensing', 'IP', 'intellectual property'
     ];
 
     if (cleaned.length <= 50) {
       return cleaned;
     }
 
-    // Try to find a sentence with biomedical context
+    // Try to find a sentence with patent-related context
     const sentences = cleaned.split(/[.!?]+/);
     for (const sentence of sentences) {
       const trimmed = sentence.trim();
       if (trimmed.length > 10 && trimmed.length <= 50) {
-        // Check if this sentence contains biomedical keywords
-        const hasBiomedContext = biomedKeywords.some(keyword =>
+        // Check if this sentence contains patent keywords
+        const hasPatentContext = patentKeywords.some(keyword =>
           trimmed.toLowerCase().includes(keyword.toLowerCase())
         );
 
-        if (hasBiomedContext) {
+        if (hasPatentContext) {
           return trimmed;
         }
       }
     }
-    
+
     // Fall back to smart truncation
     const truncated = cleaned.substring(0, 47);
     const lastSpace = truncated.lastIndexOf(' ');
     const lastPeriod = truncated.lastIndexOf('.');
     const lastQuestion = truncated.lastIndexOf('?');
-    
+
     const breakPoint = Math.max(lastSpace, lastPeriod, lastQuestion);
     const title = breakPoint > 20 ? truncated.substring(0, breakPoint) : truncated;
-    
+
     return title + (title.endsWith('.') || title.endsWith('?') ? '' : '...');
   }, []);
 
   const createSession = useCallback(async (firstMessage: string): Promise<string | null> => {
     if (!user) return null;
-    
+
     try {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      
       // Use fast fallback title initially
       const quickTitle = generateSessionTitle(firstMessage);
-      
-      // Create session immediately with fallback title
+
+      // Create session immediately with fallback title (auth via Supabase cookies)
       const response = await fetch('/api/chat/sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify({ title: quickTitle })
       });
 
       if (response.ok) {
         const { session: newSession } = await response.json();
-        
+
         // Generate better AI title in background (don't wait)
         const titleHeaders: Record<string, string> = {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
         };
 
         // Add Ollama preference header if in development mode
@@ -1787,14 +1715,13 @@ export function ChatInterface({
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session?.access_token}`
               },
               body: JSON.stringify({ title: aiTitle })
             });
           }
         }).catch(() => {
         });
-        
+
         return newSession.id;
       }
     } catch (error) {
@@ -1803,7 +1730,7 @@ export function ChatInterface({
   }, [user, generateSessionTitle]);
 
   // Placeholder for loadSessionMessages - will be defined after useChat hook
-  
+
   const transport = useMemo(() =>
     new DefaultChatTransport({
       api: "/api/chat",
@@ -1825,25 +1752,21 @@ export function ChatInterface({
           }
         }
 
-        if (user) {
-          const supabase = createClient();
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.access_token) {
-            headers['Authorization'] = `Bearer ${session.access_token}`;
-          }
-        }
+        // Auth is handled via Supabase cookies - no need for explicit token header
 
-        // Rate limit increment is handled by the backend API
+        // Get Valyu OAuth token for API proxy (uses user's credits instead of server's)
+        const valyuAccessToken = getValyuAccessToken();
 
         return {
           body: {
             messages,
             sessionId: sessionIdRef.current,
+            valyuAccessToken, // Pass to server for Valyu API proxy
           },
           headers,
         };
       }
-    }), [selectedModel, selectedProvider, user, increment]
+    }), [selectedModel, selectedProvider, getValyuAccessToken]
   );
 
   const {
@@ -1855,7 +1778,7 @@ export function ChatInterface({
     regenerate,
     setMessages,
     addToolResult,
-  } = useChat<BiomedUIMessage>({
+  } = useChat<PatentUIMessage>({
     transport,
     // Automatically submit when all tool results are available
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
@@ -1890,17 +1813,11 @@ export function ChatInterface({
   // Session loading function - defined after useChat to access setMessages
   const loadSessionMessages = useCallback(async (sessionId: string) => {
     if (!user) return;
-    
+
     setIsLoadingSession(true);
     try {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const response = await fetch(`/api/chat/sessions/${sessionId}`, {
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`
-        }
-      });
+      // Auth via Supabase cookies
+      const response = await fetch(`/api/chat/sessions/${sessionId}`);
 
       if (response.ok) {
         const { messages: sessionMessages } = await response.json();
@@ -2615,7 +2532,7 @@ export function ChatInterface({
     }, 4); // Adjust speed here (lower = faster)
   };
 
-  const getMessageText = (message: BiomedUIMessage) => {
+  const getMessageText = (message: PatentUIMessage) => {
     return message.parts
       .filter((part) => part.type === "text")
       .map((part) => part.text)
@@ -3094,18 +3011,6 @@ export function ChatInterface({
                               latestStepTitle = "Patent Search";
                               latestStepSubtitle = latestStep.part.input?.query || "...";
                               latestStepIcon = <Search className="h-5 w-5 text-primary" />;
-                            } else if (toolType === "clinicalTrialsSearch") {
-                              latestStepTitle = "Clinical Trials";
-                              latestStepSubtitle = latestStep.part.input?.query || "...";
-                              latestStepIcon = <Search className="h-5 w-5 text-primary" />;
-                            } else if (toolType === "drugInformationSearch") {
-                              latestStepTitle = "Drug Information";
-                              latestStepSubtitle = latestStep.part.input?.query || "...";
-                              latestStepIcon = <Search className="h-5 w-5 text-primary" />;
-                            } else if (toolType === "biomedicalLiteratureSearch") {
-                              latestStepTitle = "Literature Search";
-                              latestStepSubtitle = latestStep.part.input?.query || "...";
-                              latestStepIcon = <BookOpen className="h-5 w-5 text-primary" />;
                             } else if (toolType === "webSearch") {
                               latestStepTitle = "Web Search";
                               latestStepSubtitle = latestStep.part.input?.query || "...";
@@ -3348,125 +3253,6 @@ export function ChatInterface({
                                 );
                               }
 
-                              // Clinical Trials Search Tool
-                              case "tool-clinicalTrialsSearch": {
-                                const callId = part.toolCallId;
-                                const isStreaming = part.state === "input-streaming" || part.state === "input-available";
-                                const hasResults = part.state === "output-available";
-                                const hasError = part.state === "output-error";
-
-                                if (hasError) {
-                                  return (
-                                    <div key={callId} className="my-1">
-                                      <TimelineStep
-                                        part={part}
-                                        messageId={message.id}
-                                        index={index}
-                                        status="error"
-                                        type="search"
-                                        title="Clinical Trials Search Error"
-                                        subtitle={part.errorText}
-                                        icon={<AlertCircle />}
-                                        expandedTools={expandedTools}
-                                        toggleToolExpansion={toggleToolExpansion}
-                                      />
-                                    </div>
-                                  );
-                                }
-
-                                const trialsResults = hasResults ? extractSearchResults(part.output) : [];
-                                const query = part.input?.query || "";
-
-                                // Parse output to get favicon
-                                let faviconUrl = 'https://clinicaltrials.gov/favicon.ico';
-                                try {
-                                  const data = JSON.parse(part.output || '{}');
-                                  if (data.favicon) faviconUrl = data.favicon;
-                                } catch (e) {}
-
-                                // Create single favicon subtitle when complete
-                                let subtitleContent: React.ReactNode = query;
-                                if (!isStreaming && trialsResults.length > 0) {
-                                  subtitleContent = (
-                                    <div className="flex flex-col gap-1">
-                                      <div className="text-xs text-muted-foreground">{query}</div>
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
-                                          <Favicon url={faviconUrl} size={12} className="w-3 h-3" />
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">
-                                          {trialsResults.length} results
-                                        </span>
-                                      </div>
-                                    </div>
-                                  );
-                                }
-
-                                return (
-                                  <div key={callId}>
-                                    <div className="group relative py-0.5 animate-in fade-in duration-200">
-                                      <div
-                                        className={`relative flex items-start gap-4 py-4 px-4 -mx-2 rounded-md transition-all duration-150 ${
-                                          isStreaming ? 'bg-primary/5' : ''
-                                        } ${
-                                          hasResults ? 'hover:bg-muted dark:hover:bg-card/[0.02] cursor-pointer' : ''
-                                        }`}
-                                        onClick={hasResults ? () => toggleToolExpansion(`step-search-${message.id}-${index}`) : undefined}
-                                      >
-                                        {/* Status indicator */}
-                                        <div className="flex-shrink-0">
-                                          {!isStreaming ? (
-                                            <div className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center">
-                                              <Check className="w-2.5 h-2.5 text-primary stroke-[2.5]" />
-                                            </div>
-                                          ) : (
-                                            <div className="relative w-4 h-4">
-                                              <div className="absolute inset-0 rounded-full border border-primary/40" />
-                                              <div className="absolute inset-0 rounded-full border border-transparent border-t-primary animate-spin" />
-                                            </div>
-                                          )}
-                                        </div>
-
-                                        {/* Icon */}
-                                        <div className={`flex-shrink-0 w-4 h-4 ${
-                                          isStreaming ? 'text-primary' : 'text-muted-foreground'
-                                        }`}>
-                                          <Search />
-                                        </div>
-
-                                        {/* Content */}
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-baseline gap-2 mb-1">
-                                            <span className="text-sm font-medium text-foreground">
-                                              Clinical Trials Search
-                                            </span>
-                                          </div>
-                                          {!isStreaming && trialsResults.length > 0 && subtitleContent}
-                                          {isStreaming && <div className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{query}</div>}
-                                        </div>
-
-                                        {/* Chevron */}
-                                        {hasResults && !isStreaming && (
-                                          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground flex-shrink-0 transition-transform duration-150 ${
-                                            expandedTools.has(`step-search-${message.id}-${index}`) ? 'rotate-180' : ''
-                                          }`} />
-                                        )}
-                                      </div>
-
-                                      {/* Expanded content */}
-                                      {expandedTools.has(`step-search-${message.id}-${index}`) && hasResults && (
-                                        <div className="mt-1.5 ml-6 mr-2 animate-in fade-in duration-150">
-                                          <SearchResultsCarousel
-                                            results={trialsResults}
-                                            type="clinical"
-                                          />
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              }
-
                               // Web Search Tool
                               case "tool-webSearch": {
                                 const callId = part.toolCallId;
@@ -3640,166 +3426,6 @@ export function ChatInterface({
                                         <SearchResultsCarousel
                                           results={patentResults}
                                           type="patent"
-                                        />
-                                      )}
-                                    </TimelineStep>
-                                  </div>
-                                );
-                              }
-
-                              // Biomedical Literature Search Tool
-                              case "tool-biomedicalLiteratureSearch": {
-                                const callId = part.toolCallId;
-                                const isStreaming = part.state === "input-streaming" || part.state === "input-available";
-                                const hasResults = part.state === "output-available";
-                                const hasError = part.state === "output-error";
-
-                                if (hasError) {
-                                  return (
-                                    <div key={callId} className="my-1">
-                                      <TimelineStep
-                                        part={part}
-                                        messageId={message.id}
-                                        index={index}
-                                        status="error"
-                                        type="search"
-                                        title="Literature Search Error"
-                                        subtitle={part.errorText}
-                                        icon={<AlertCircle />}
-                                        expandedTools={expandedTools}
-                                        toggleToolExpansion={toggleToolExpansion}
-                                      />
-                                    </div>
-                                  );
-                                }
-
-                                const literatureResults = hasResults ? extractSearchResults(part.output) : [];
-                                const query = part.input?.query || "";
-
-                                // Create favicon stack subtitle when complete (like web search)
-                                let subtitleContent: React.ReactNode = query;
-                                if (!isStreaming && literatureResults.length > 0) {
-                                  const displayResults = literatureResults.slice(0, 5);
-                                  subtitleContent = (
-                                    <div className="flex flex-col gap-1">
-                                      <div className="text-xs text-muted-foreground">{query}</div>
-                                      <div className="flex items-center gap-2">
-                                        <div className="flex -space-x-2">
-                                          {displayResults.map((result: any, idx: number) => (
-                                            <div
-                                              key={idx}
-                                              className="w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden"
-                                              style={{ zIndex: 5 - idx }}
-                                            >
-                                              <Favicon url={result.url} size={12} className="w-3 h-3" />
-                                            </div>
-                                          ))}
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">
-                                          {literatureResults.length} results
-                                        </span>
-                                      </div>
-                                    </div>
-                                  );
-                                }
-
-                                return (
-                                  <div key={callId}>
-                                    <TimelineStep
-                                      part={part}
-                                      messageId={message.id}
-                                      index={index}
-                                      status={isStreaming ? "streaming" : "complete"}
-                                      type="search"
-                                      title="Literature Search"
-                                      subtitle={subtitleContent}
-                                      icon={<BookOpen />}
-                                      expandedTools={expandedTools}
-                                      toggleToolExpansion={toggleToolExpansion}
-                                    >
-                                      {hasResults && literatureResults.length > 0 && (
-                                        <SearchResultsCarousel
-                                          results={literatureResults}
-                                          type="literature"
-                                        />
-                                      )}
-                                    </TimelineStep>
-                                  </div>
-                                );
-                              }
-
-                              // Drug Information Search Tool
-                              case "tool-drugInformationSearch": {
-                                const callId = part.toolCallId;
-                                const isStreaming = part.state === "input-streaming" || part.state === "input-available";
-                                const hasResults = part.state === "output-available";
-                                const hasError = part.state === "output-error";
-
-                                if (hasError) {
-                                  return (
-                                    <div key={callId} className="my-1">
-                                      <TimelineStep
-                                        part={part}
-                                        messageId={message.id}
-                                        index={index}
-                                        status="error"
-                                        type="search"
-                                        title="Drug Information Search Error"
-                                        subtitle={part.errorText}
-                                        icon={<AlertCircle />}
-                                        expandedTools={expandedTools}
-                                        toggleToolExpansion={toggleToolExpansion}
-                                      />
-                                    </div>
-                                  );
-                                }
-
-                                const drugResults = hasResults ? extractSearchResults(part.output) : [];
-                                const query = part.input?.query || "";
-
-                                // Parse output to get favicon
-                                let faviconUrl = 'https://dailymed.nlm.nih.gov/dailymed/image/NLM-logo.png';
-                                try {
-                                  const data = JSON.parse(part.output || '{}');
-                                  if (data.favicon) faviconUrl = data.favicon;
-                                } catch (e) {}
-
-                                // Create single favicon subtitle when complete
-                                let subtitleContent: React.ReactNode = query;
-                                if (!isStreaming && drugResults.length > 0) {
-                                  subtitleContent = (
-                                    <div className="flex flex-col gap-1">
-                                      <div className="text-xs text-muted-foreground">{query}</div>
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
-                                          <Favicon url={faviconUrl} size={12} className="w-3 h-3" />
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">
-                                          {drugResults.length} results
-                                        </span>
-                                      </div>
-                                    </div>
-                                  );
-                                }
-
-                                return (
-                                  <div key={callId}>
-                                    <TimelineStep
-                                      part={part}
-                                      messageId={message.id}
-                                      index={index}
-                                      status={isStreaming ? "streaming" : "complete"}
-                                      type="search"
-                                      title="Drug Information"
-                                      subtitle={subtitleContent}
-                                      icon={<Search />}
-                                      expandedTools={expandedTools}
-                                      toggleToolExpansion={toggleToolExpansion}
-                                    >
-                                      {hasResults && drugResults.length > 0 && (
-                                        <SearchResultsCarousel
-                                          results={drugResults}
-                                          type="drug"
                                         />
                                       )}
                                     </TimelineStep>

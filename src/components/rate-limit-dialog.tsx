@@ -172,10 +172,10 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
     track('Platform Clickthrough', {
       source: 'rate_limit_dialog',
       action: 'build_your_own',
-      url: 'https://platform.valyu.ai/?utm_source=biomed.valyu.ai&utm_medium=rate_limit_dialog'
+      url: 'https://platform.valyu.ai/?utm_source=patents.valyu.ai&utm_medium=rate_limit_dialog'
     });
-    
-    window.open('https://platform.valyu.ai/?utm_source=biomed.valyu.ai&utm_medium=rate_limit_dialog', '_blank');
+
+    window.open('https://platform.valyu.ai/?utm_source=patents.valyu.ai&utm_medium=rate_limit_dialog', '_blank');
   };
 
   const handleCreateAccount = () => {

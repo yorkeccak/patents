@@ -46,8 +46,8 @@ export function ModelCompatibilityDialog({
                   tool calling (function calls).
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  This means it won&apos;t be able to execute Python code, search the web, fetch biomedical
-                  data, or use other interactive tools. You can still have a conversation, but functionality
+                  This means it won&apos;t be able to execute Python code, search patents, search the web,
+                  or use other interactive tools. You can still have a conversation, but functionality
                   will be limited to text responses only.
                 </p>
               </>
