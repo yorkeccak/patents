@@ -75,7 +75,11 @@ export async function POST(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       // Log full error server-side for debugging, but don't expose details to client
-      console.error('[Valyu Token] Token exchange failed:', tokenData.error);
+      console.error('[Valyu Token] Token exchange failed. Status:', tokenResponse.status);
+      console.error('[Valyu Token] Response:', JSON.stringify(tokenData));
+      console.error('[Valyu Token] Token endpoint:', tokenEndpoint);
+      console.error('[Valyu Token] Client ID:', VALYU_CLIENT_ID);
+      console.error('[Valyu Token] Redirect URI:', redirect_uri);
 
       // Sanitize error messages - don't leak internal Supabase errors
       const SAFE_ERROR_MESSAGES: Record<string, string> = {
