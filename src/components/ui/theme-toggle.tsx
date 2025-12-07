@@ -6,7 +6,7 @@ import { useRateLimit } from '@/lib/hooks/use-rate-limit';
 
 export function ThemeSelector() {
   const { setTheme, theme } = useTheme();
-  const { tier, hasPolarCustomer } = useRateLimit();
+  const { tier } = useRateLimit();
 
   const hasSubscription = tier !== 'free' && tier !== 'anonymous';
 
@@ -15,8 +15,8 @@ export function ThemeSelector() {
       value={theme as 'light' | 'dark' | 'system'}
       onChange={(newTheme) => setTheme(newTheme)}
       defaultValue="dark"
-      requiresSubscription={true}
-      hasSubscription={hasSubscription}
+      requiresSubscription={false}
+      hasSubscription={true}
     />
   );
 }
@@ -29,7 +29,7 @@ export function CompactThemeSelector({
   sessionId?: string;
 }) {
   const { setTheme, theme } = useTheme();
-  const { tier, hasPolarCustomer, userId } = useRateLimit();
+  const { tier, userId } = useRateLimit();
 
   const hasSubscription = tier !== 'free' && tier !== 'anonymous';
 
@@ -39,8 +39,8 @@ export function CompactThemeSelector({
       onChange={(newTheme) => setTheme(newTheme)}
       defaultValue="dark"
       className="h-8 scale-75"
-      requiresSubscription={true}
-      hasSubscription={hasSubscription}
+      requiresSubscription={false}
+      hasSubscription={true}
       onUpgradeClick={onUpgradeClick}
       userId={userId}
       sessionId={sessionId}
@@ -51,7 +51,7 @@ export function CompactThemeSelector({
 
 export function ThemeMenuItem() {
   const { setTheme, theme } = useTheme();
-  const { tier, hasPolarCustomer } = useRateLimit();
+  const { tier } = useRateLimit();
 
   const hasSubscription = tier !== 'free' && tier !== 'anonymous';
 
@@ -60,8 +60,8 @@ export function ThemeMenuItem() {
       value={theme as 'light' | 'dark' | 'system'}
       onChange={(newTheme) => setTheme(newTheme)}
       defaultValue="dark"
-      requiresSubscription={true}
-      hasSubscription={hasSubscription}
+      requiresSubscription={false}
+      hasSubscription={true}
     />
   );
 }

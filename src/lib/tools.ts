@@ -2,7 +2,6 @@ import { z } from "zod";
 import { tool } from "ai";
 import { Valyu } from "valyu-js";
 import { track } from "@vercel/analytics/server";
-import { PolarEventTracker } from '@/lib/polar-events';
 import { Daytona } from '@daytonaio/sdk';
 import * as db from '@/lib/db';
 import { randomUUID } from 'crypto';
@@ -536,19 +535,6 @@ export const healthcareTools = {
             hasDescription: !!description,
           });
 
-          if (userId && sessionId && userTier === 'pay_per_use' && execution.exitCode === 0 && !isDevelopment) {
-            try {
-              const polarTracker = new PolarEventTracker();
-              await polarTracker.trackDaytonaUsage(userId, sessionId, executionTime, {
-                codeLength: code.length,
-                success: true,
-                description: description || 'Code execution'
-              });
-            } catch (error) {
-              console.error('[CodeExecution] Failed to track usage:', error);
-            }
-          }
-
           if (execution.exitCode !== 0) {
             return `❌ **Execution Error**: ${execution.result || 'Unknown error'}`;
           }
@@ -655,20 +641,6 @@ ${execution.result || '(No output produced)'}
           query: query,
           resultCount: response?.results?.length || 0,
         });
-
-        if (userId && sessionId && userTier === 'pay_per_use' && !isDevelopment) {
-          try {
-            const polarTracker = new PolarEventTracker();
-            const valyuCostDollars = (response as any)?.total_deduction_dollars || 0;
-            await polarTracker.trackValyuAPIUsage(userId, sessionId, "patentSearch", valyuCostDollars, {
-              query,
-              resultCount: response?.results?.length || 0,
-              success: true,
-            });
-          } catch (error) {
-            console.error('[PatentSearch] Failed to track usage:', error);
-          }
-        }
 
         // Cache full patent content and return truncated results
         const { extractPatentAbstract, parsePatentMetadata, extractPatentNumber } = await import('./patent-utils');
@@ -906,20 +878,6 @@ ${execution.result || '(No output produced)'}
           query: query,
           resultCount: response?.results?.length || 0,
         });
-
-        if (userId && sessionId && userTier === 'pay_per_use' && !isDevelopment) {
-          try {
-            const polarTracker = new PolarEventTracker();
-            const valyuCostDollars = (response as any)?.total_deduction_dollars || 0;
-            await polarTracker.trackValyuAPIUsage(userId, sessionId, "webSearch", valyuCostDollars, {
-              query,
-              resultCount: response?.results?.length || 0,
-              success: true,
-            });
-          } catch (error) {
-            console.error('[WebSearch] Failed to track usage:', error);
-          }
-        }
 
         return JSON.stringify({
           type: "web_search",

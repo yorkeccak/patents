@@ -37,19 +37,11 @@ export async function GET(request: NextRequest) {
       rateLimitResult = await checkUserRateLimit(user.id);
       console.log('[Rate Limit API] Authenticated user rate limit result:', rateLimitResult);
       
-      // Get user's polar customer ID for billing portal access
-      const { data: userData } = await supabase
-        .from('users')
-        .select('polar_customer_id')
-        .eq('id', user.id)
-        .single();
-      
       return NextResponse.json({
         ...rateLimitResult,
         resetTime: rateLimitResult.resetTime.toISOString(),
         isAuthenticated: true,
         userId: user.id,
-        hasPolarCustomer: !!userData?.polar_customer_id,
       });
     } else {
       // Anonymous user - use cookie-based rate limiting

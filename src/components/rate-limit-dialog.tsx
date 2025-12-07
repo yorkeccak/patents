@@ -2,14 +2,11 @@
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ExternalLink, Copy, Check, Github, CreditCard, Code, ChartLine, Building2 } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
+import { ExternalLink, Copy, Check, Github, Code, Building2 } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import Image from 'next/image';
 import { track } from '@vercel/analytics';
 import { useAuthStore } from '@/lib/stores/use-auth-store';
-import { useRateLimit } from '@/lib/hooks/use-rate-limit';
-import { createClient } from '@/utils/supabase/client-wrapper';
 import { EnterpriseContactModal } from '@/components/enterprise/enterprise-contact-modal';
 
 interface RateLimitDialogProps {
@@ -21,45 +18,12 @@ interface RateLimitDialogProps {
 
 export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: RateLimitDialogProps) {
   const user = useAuthStore((state) => state.user);
-  const { tier, hasPolarCustomer } = useRateLimit();
 
   const [copied, setCopied] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [showEnterpriseModal, setShowEnterpriseModal] = useState(false);
-  const [activeTab, setActiveTab] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('preferredLanguage') || 'Python';
-    }
-    return 'Python';
-  });
-  
-  // Dynamic example queries
-  const exampleQueries = useMemo(() => [
-    "Prior art for transformer neural networks",
-    "Google AI patents filed 2023-2024",
-    "Patent search for CRISPR gene editing",
-    "FTO analysis for lithium-sulfur batteries",
-    "Competitive intelligence Tesla battery patents",
-    "Find patents citing US 11,234,567",
-    "Patent landscape for quantum computing",
-    "Invalidation search for drug delivery systems",
-    "Technology trends in solid-state batteries",
-    "Patent portfolio analysis for OpenAI"
-  ], []);
-
-  const [currentExampleIndex, setCurrentExampleIndex] = useState(0);
-  const [currentText, setCurrentText] = useState('');
-  const [isTyping, setIsTyping] = useState(true);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('preferredLanguage', activeTab);
-    }
-  }, [activeTab]);
 
   useEffect(() => {
     if (open) {
-      // Track rate limit hit
       track('Rate Limit Hit', {
         resetTime: resetTime.toISOString(),
         remainingQueries: 0
@@ -67,56 +31,12 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
     }
   }, [open, resetTime]);
 
-  // Typing animation effect
-  useEffect(() => {
-    if (!open) return;
-
-    let timeout: NodeJS.Timeout;
-    const currentExample = exampleQueries[currentExampleIndex];
-    
-    if (isTyping) {
-      // Typing forward
-      if (currentText.length < currentExample.length) {
-        timeout = setTimeout(() => {
-          setCurrentText(currentExample.slice(0, currentText.length + 1));
-        }, 50); // Typing speed
-      } else {
-        // Finished typing, wait then start erasing
-        timeout = setTimeout(() => {
-          setIsTyping(false);
-        }, 2000); // Pause after finishing
-      }
-    } else {
-      // Erasing
-      if (currentText.length > 0) {
-        timeout = setTimeout(() => {
-          setCurrentText(currentText.slice(0, -1));
-        }, 30); // Erasing speed (faster)
-      } else {
-        // Finished erasing, move to next example
-        setCurrentExampleIndex((prev) => (prev + 1) % exampleQueries.length);
-        setIsTyping(true);
-      }
-    }
-
-    return () => clearTimeout(timeout);
-  }, [open, currentText, isTyping, currentExampleIndex, exampleQueries]);
-
-  // Reset animation when dialog opens
-  useEffect(() => {
-    if (open) {
-      setCurrentExampleIndex(0);
-      setCurrentText('');
-      setIsTyping(true);
-    }
-  }, [open]);
-
   const formatResetTime = (date: Date) => {
     const now = new Date();
     const diffMs = date.getTime() - now.getTime();
     const hours = Math.floor(diffMs / (1000 * 60 * 60));
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes}m`;
     }
@@ -126,46 +46,12 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
   const handleCopy = async (code: string) => {
     track('Code Copy', {
       source: 'rate_limit_dialog',
-      language: activeTab,
       codeLength: code.length
     });
-    
+
     await navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleUpgrade = async (planType: string) => {
-    setLoading(true);
-    try {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // Create Polar checkout session
-      const response = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ plan: planType })
-      });
-
-      if (response.ok) {
-        const { checkoutUrl } = await response.json();
-        
-        // Track checkout initiation
-        track('Checkout Started', {
-          source: 'rate_limit_dialog',
-          plan: planType
-        });
-        
-        window.location.href = checkoutUrl;
-      }
-    } catch (error) {
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleBuildYourOwn = () => {
@@ -183,15 +69,15 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
       source: 'rate_limit_dialog',
       trigger: 'create_account'
     });
-    
+
     onShowAuth?.();
     onOpenChange(false);
   };
 
-  const codeSnippet = `curl -X POST "https://api.valyu.ai/v1/search" \\
+  const codeSnippet = `curl -X POST "https://api.valyu.ai/v1/deepsearch" \\
   -H "Authorization: x-api-key your_api_key" \\
   -H "Content-Type: application/json" \\
-  -d '{"query": "latest tesla MD&A 10-k", "max_results": 2}'`;
+  -d '{"query": "transformer neural network patents", "max_num_results": 10}'`;
 
   return (
     <AnimatePresence>
@@ -199,7 +85,7 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
         <Dialog open={open} onOpenChange={onOpenChange}>
           <DialogContent className="fixed left-[50%] top-[50%] z-50 w-[90vw] max-w-md translate-x-[-50%] translate-y-[-50%]">
             <DialogTitle className="sr-only">Daily Rate Limit Reached</DialogTitle>
-            
+
             <div className="text-center space-y-6">
               {/* Header */}
               <div>
@@ -216,30 +102,21 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
                 {!user ? (
                   <Button
                     onClick={handleCreateAccount}
-                    disabled={loading}
                     className="w-full"
                   >
-                    Create Account
+                    Sign in with Valyu
                   </Button>
                 ) : (
-                  <div className="space-y-2">
-                    <Button
-                      onClick={() => handleUpgrade('pay_per_use')}
-                      disabled={loading}
-                      className="w-full"
+                  <div className="text-sm text-muted-foreground p-3 bg-muted rounded-lg">
+                    Your usage is billed through your Valyu account. Add credits at{' '}
+                    <a
+                      href="https://platform.valyu.ai/user/account"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
                     >
-                      <ChartLine className="mr-2 h-4 w-4" />
-                      Can&apos;t wait? Pay Per Use
-                    </Button>
-                    <Button
-                      onClick={() => handleUpgrade('unlimited')}
-                      disabled={loading}
-                      variant="outline"
-                      className="w-full"
-                    >
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Unlimited - $15/month
-                    </Button>
+                      platform.valyu.ai
+                    </a>
                   </div>
                 )}
 
@@ -276,9 +153,9 @@ export function RateLimitDialog({ open, onOpenChange, resetTime, onShowAuth }: R
                     onClick={() => {
                       track('GitHub CTA Click', {
                         source: 'rate_limit_dialog',
-                        url: 'https://github.com/yourusername/patentai/'
+                        url: 'https://github.com/yorkeccak/patents'
                       });
-                      window.open('https://github.com/yourusername/patentai/', '_blank');
+                      window.open('https://github.com/yorkeccak/patents', '_blank');
                     }}
                     variant="ghost"
                     className="flex-1 text-sm"

@@ -17,7 +17,6 @@ export interface UseRateLimitReturn extends Partial<RateLimitResult> {
   isLoading: boolean;
   isAuthenticated: boolean;
   displayText: string;
-  hasPolarCustomer: boolean;
   userId?: string;
   refresh: () => Promise<void>;
   increment: () => Promise<RateLimitResult | null>;
@@ -198,7 +197,6 @@ export function useRateLimit(): UseRateLimitReturn {
     used: rateLimit?.used,
     isLoading,
     isAuthenticated: data?.isAuthenticated || false,
-    hasPolarCustomer: data?.hasPolarCustomer || false,
     userId: data?.userId,
     displayText,
     refresh,

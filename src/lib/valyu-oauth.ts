@@ -76,40 +76,44 @@ export function generateState(): string {
 }
 
 /**
- * Store PKCE verifier in sessionStorage
+ * Store PKCE verifier in localStorage
+ * Using localStorage instead of sessionStorage to persist across tabs
+ * (needed when email confirmation opens in a new tab)
  */
 export function storeCodeVerifier(verifier: string): void {
   if (typeof window !== 'undefined') {
-    sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
+    localStorage.setItem(PKCE_VERIFIER_KEY, verifier);
   }
 }
 
 /**
- * Retrieve and clear PKCE verifier from sessionStorage
+ * Retrieve and clear PKCE verifier from localStorage
  */
 export function retrieveCodeVerifier(): string | null {
   if (typeof window === 'undefined') return null;
-  const verifier = sessionStorage.getItem(PKCE_VERIFIER_KEY);
-  sessionStorage.removeItem(PKCE_VERIFIER_KEY);
+  const verifier = localStorage.getItem(PKCE_VERIFIER_KEY);
+  localStorage.removeItem(PKCE_VERIFIER_KEY);
   return verifier;
 }
 
 /**
- * Store OAuth state in sessionStorage
+ * Store OAuth state in localStorage
+ * Using localStorage instead of sessionStorage to persist across tabs
+ * (needed when email confirmation opens in a new tab)
  */
 export function storeOAuthState(state: string): void {
   if (typeof window !== 'undefined') {
-    sessionStorage.setItem(OAUTH_STATE_KEY, state);
+    localStorage.setItem(OAUTH_STATE_KEY, state);
   }
 }
 
 /**
- * Retrieve and clear OAuth state from sessionStorage
+ * Retrieve and clear OAuth state from localStorage
  */
 export function retrieveOAuthState(): string | null {
   if (typeof window === 'undefined') return null;
-  const state = sessionStorage.getItem(OAUTH_STATE_KEY);
-  sessionStorage.removeItem(OAUTH_STATE_KEY);
+  const state = localStorage.getItem(OAUTH_STATE_KEY);
+  localStorage.removeItem(OAUTH_STATE_KEY);
   return state;
 }
 
