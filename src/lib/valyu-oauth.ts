@@ -14,6 +14,8 @@
 const VALYU_SUPABASE_URL = process.env.NEXT_PUBLIC_VALYU_SUPABASE_URL || '';
 const VALYU_APP_URL = process.env.NEXT_PUBLIC_VALYU_APP_URL || 'https://platform.valyu.ai';
 const VALYU_CLIENT_ID = process.env.NEXT_PUBLIC_VALYU_CLIENT_ID || '';
+// App identifier for UTM tracking (e.g., "patents.valyu.ai")
+const VALYU_UTM_SOURCE = process.env.NEXT_PUBLIC_VALYU_UTM_SOURCE || 'patents.valyu.ai';
 
 // OAuth 2.1 endpoints (Supabase Auth handles authorization and token exchange)
 export const VALYU_OAUTH_ENDPOINTS = {
@@ -144,6 +146,7 @@ export async function buildAuthorizationUrl(redirectUri: string): Promise<string
     state: state,
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
+    utm_source: VALYU_UTM_SOURCE,
   });
 
   return `${VALYU_OAUTH_ENDPOINTS.authorize}?${params.toString()}`;
