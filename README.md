@@ -191,7 +191,7 @@ Contributions are welcome. Submit a Pull Request.
 </p>
 
 <p align="center">
-  <a href="https://twitter.com/ValyuNetwork">Twitter</a> •
+  <a href="https://twitter.com/valyuOfficial">Twitter</a> •
   <a href="https://www.linkedin.com/company/valyu-ai">LinkedIn</a> •
   <a href="https://github.com/yorkeccak/patents">GitHub</a>
 </p>
