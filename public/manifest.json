@@ -1,0 +1,26 @@
+{
+  "name": "PatentAI - AI Patent Search & Prior Art Analysis",
+  "short_name": "PatentAI",
+  "description": "AI-powered conversational patent search. Prior art search, FTO analysis, competitive intelligence through natural language.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
