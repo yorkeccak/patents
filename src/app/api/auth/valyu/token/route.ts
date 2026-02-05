@@ -53,18 +53,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Exchange code for tokens at Supabase OAuth token endpoint
+    // Exchange code for tokens at Supabase OAuth token endpoint using client_secret_basic
     const tokenEndpoint = `${VALYU_SUPABASE_URL}/auth/v1/oauth/token`;
+    const basicAuth = Buffer.from(`${VALYU_CLIENT_ID}:${VALYU_CLIENT_SECRET}`).toString('base64');
 
     const tokenResponse = await fetch(tokenEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${basicAuth}`,
       },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
-        client_id: VALYU_CLIENT_ID,
-        client_secret: VALYU_CLIENT_SECRET,
         code: code,
         redirect_uri: redirect_uri,
         code_verifier: code_verifier,
