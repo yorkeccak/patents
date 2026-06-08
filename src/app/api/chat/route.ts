@@ -1,4 +1,4 @@
-import { streamText, convertToModelMessages } from "ai";
+import { streamText, convertToModelMessages, stepCountIs, pruneMessages } from "ai";
 import { getToolsForUser } from "@/lib/tools";
 import { PatentUIMessage } from "@/lib/types";
 import { openai, createOpenAI } from "@ai-sdk/openai";
@@ -196,11 +196,33 @@ export async function POST(req: Request) {
     // Get tools based on user authentication status
     const tools = getToolsForUser(!!user);
 
+    // Compaction safety net: only prunes when the prompt gets large, so normal
+    // turns are untouched (lossless). Drops stale tool outputs from older turns
+    // while keeping the latest. Reasoning items are NOT pruned - this is a
+    // reasoning model (providerOptions.openai.include reasoning content), and
+    // pruning reasoning can break reasoning-item linkage.
+    const CONTEXT_BUDGET_CHARS = 350_000; // ~90k tokens; well under the model window
+    const prepareStep = async ({ messages: stepMessages }: { messages: any[] }) => {
+      if (JSON.stringify(stepMessages).length < CONTEXT_BUDGET_CHARS) return undefined;
+      console.log('[Chat API] Context budget exceeded - pruning stale tool outputs');
+      return {
+        messages: pruneMessages({
+          messages: stepMessages,
+          toolCalls: 'before-last-message',
+          reasoning: 'none',
+          emptyMessages: 'remove',
+        }),
+      };
+    };
+
     const result = streamText({
       model: selectedModel as any,
-      messages: convertToModelMessages(messages),
+      messages: await convertToModelMessages(messages),
       tools,
       toolChoice: "auto",
+      stopWhen: stepCountIs(12),   // hard cap on the agentic tool loop
+      maxOutputTokens: 4000,       // bound per-step generation
+      prepareStep,                 // compaction safety net (see above)
       experimental_context: {
         userId: user?.id,
         sessionId,
@@ -224,13 +246,18 @@ export async function POST(req: Request) {
       - Abstracts provide sufficient detail for initial relevance assessment
       - Use this for: patent landscape analysis, portfolio overviews, initial screening, competitive intelligence
       - **jurisdiction** parameter ('us' | 'ep' | 'all'): choose deliberately. Use 'us' for US-only prosecution or US freedom-to-operate, 'ep' for European freedom-to-operate, and 'all' (default) for novelty and landscape searches. FTO is jurisdiction-specific - clear a product only in the offices where it will be commercialized.
+      - **startDate / endDate** parameters (YYYY-MM-DD, filter by publication date): set these whenever the user gives any date constraint. Convert ranges to full dates - "since 2020" -> startDate "2020-01-01"; "before 2015" -> endDate "2014-12-31"; "2018-2022" -> startDate "2018-01-01", endDate "2022-12-31"; "in 2023" -> startDate "2023-01-01", endDate "2023-12-31". For prior-art/novelty searches, set endDate to just before the invention's priority date so only earlier art is returned.
       ${user ? `
-      ### 2. readFullPatent (Deep Dive Analysis)
-      - Retrieves complete patent details (full claims, description, citations) by patentIndex
-      - Input parameter: **patentIndex** (the number from patentSearch results, e.g., 0, 1, 2, 3...)
-      - REQUIRED for: claim charts, FTO analysis, detailed technical comparison, claim-by-claim review
-      - Optional section filtering to save context: 'claims', 'description', 'citations', 'drawings', 'all'
-      - Can be called multiple times for different patents in the same conversation` : ''}
+      ### 2. analyzePatents (Deep Analysis - PREFERRED for any analytical task)
+      - Runs a dedicated patent-analyst subagent that reads the FULL TEXT of 1-5 patents in an isolated context and returns only a compact, citation-rich synthesis
+      - Input: **task** (the precise question + desired output) and **patentIndices** (array from patentSearch)
+      - USE THIS for claim charts, FTO assessment, prior-art / invalidity mapping, novelty, and cross-patent comparison - it keeps deep analysis from bloating the conversation
+      - Example: analyzePatents({ task: "element-by-element claim chart for claim 1 of patentIndex 0 vs patentIndex 2", patentIndices: [0, 2] })
+
+      ### 3. readFullPatent (Raw Section Retrieval)
+      - Retrieves raw patent sections (claims, description, citations, drawings) by patentIndex, truncated to save context
+      - Prefer **analyzePatents** for analysis; use readFullPatent only when the user explicitly wants to see raw section text
+      - Optional section filtering: 'claims', 'description', 'citations', 'drawings', 'all'` : ''}
 
       ${user ? `### RECOMMENDED WORKFLOW:
       1. Use **patentSearch** to identify relevant patents (scan abstracts and metadata)

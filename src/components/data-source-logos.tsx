@@ -7,9 +7,9 @@ import Image from "next/image";
 
 const logos = [
   {
-    name: "PubMed Literature",
-    src: "/pubmed.svg",
-    description: "Access PubMed biomedical literature",
+    name: "USPTO Patents",
+    src: "/assets/banner/uspto.png",
+    description: "Full-text US patents and applications with claims, descriptions, and figures",
     snippets: [
       {
         language: "Python",
@@ -17,17 +17,18 @@ const logos = [
 
 valyu = Valyu(api_key="<your_api_key>")
 
-# Search for biomedical literature
+# Search US patents (USPTO)
 response = valyu.search(
-    "pembrolizumab efficacy in NSCLC",
-    included_sources=["valyu/valyu-pubmed"]
+    "solid state battery electrolyte patents 2020-2024",
+    included_sources=["valyu/valyu-patents"]
     # or leave included_sources empty and we'll figure it out for you
 )
 
 # Access the results
-for result in response.results:
-    print(f"Title: {result.title}")
-    print(f"Content: {result.content[:200]}...")`,
+for patent in response.results:
+    print(f"Patent: {patent.metadata.get('patent_number')}")
+    print(f"Title: {patent.title}")
+    print(f"Abstract: {patent.content[:200]}...")`,
       },
       {
         language: "TypeScript",
@@ -35,15 +36,15 @@ for result in response.results:
 
 const valyu = new Valyu({ apiKey: '<your_api_key>' });
 
-// Search for biomedical literature
+// Search US patents (USPTO)
 const response = await valyu.search({
-    query: 'pembrolizumab efficacy in NSCLC',
-    includedSources: ['valyu/valyu-pubmed'],
-    // or leave included_sources empty and we'll figure it out for you
+    query: 'solid state battery electrolyte patents 2020-2024',
+    includedSources: ['valyu/valyu-patents'],
+    // or leave includedSources empty and we'll figure it out for you
 });
 
 // Access the results
-response.results.forEach(result => {
+response.results.forEach(patent => {
 });`,
       },
       {
@@ -52,16 +53,16 @@ response.results.forEach(result => {
   -H "x-api-key: <your_api_key>" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "query": "pembrolizumab efficacy in NSCLC",
-    "included_sources": ["valyu/valyu-pubmed"] # or leave this empty and we'll figure it out for you
+    "query": "solid state battery electrolyte patents 2020-2024",
+    "included_sources": ["valyu/valyu-patents"] # or leave this empty and we'll figure it out for you
   }'`,
       },
     ],
   },
   {
-    name: "arXiv Papers",
-    src: "/arxiv.svg",
-    description: "Search academic papers from arXiv",
+    name: "EPO Patents",
+    src: "/assets/banner/epo.svg",
+    description: "European Patent Office grants and applications, full text with figures",
     snippets: [
       {
         language: "Python",
@@ -69,13 +70,64 @@ response.results.forEach(result => {
 
 valyu = Valyu(api_key="<your_api_key>")
 
-# Search for academic papers
+# Search European patents (EPO)
 response = valyu.search(
-    "transformer architecture attention mechanism",
-    included_sources=["valyu/valyu-arxiv"] # or leave this empty and we'll figure it out for you
+    "CRISPR gene editing European patents",
+    included_sources=["valyu/valyu-patents-epo"]
 )
 
-# Get paper details
+# Access the results
+for patent in response.results:
+    print(f"Patent: {patent.metadata.get('patent_number')}")
+    print(f"Kind code: {patent.metadata.get('kind_code')}")
+    print(f"Title: {patent.title}")`,
+      },
+      {
+        language: "TypeScript",
+        code: `import { Valyu } from 'valyu';
+
+const valyu = new Valyu({ apiKey: '<your_api_key>' });
+
+// Search European patents (EPO)
+const response = await valyu.search({
+    query: 'CRISPR gene editing European patents',
+    includedSources: ['valyu/valyu-patents-epo'],
+});
+
+// Access the results
+response.results.forEach(patent => {
+});`,
+      },
+      {
+        language: "cURL",
+        code: `curl -X POST https://api.valyu.ai/v1/deepsearch \\
+  -H "x-api-key: <your_api_key>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "CRISPR gene editing European patents",
+    "included_sources": ["valyu/valyu-patents-epo"]
+  }'`,
+      },
+    ],
+  },
+  {
+    name: "Scientific Prior Art",
+    src: "/arxiv.svg",
+    description: "Non-patent literature (arXiv preprints) for prior-art and novelty searches",
+    snippets: [
+      {
+        language: "Python",
+        code: `from valyu import Valyu
+
+valyu = Valyu(api_key="<your_api_key>")
+
+# Find non-patent prior art (scientific literature)
+response = valyu.search(
+    "transformer attention mechanism prior art before 2017",
+    included_sources=["valyu/valyu-arxiv"]
+)
+
+# Access the results
 for paper in response.results:
     print(f"Title: {paper.title}")
     print(f"Authors: {paper.metadata.get('authors', [])}")
@@ -87,13 +139,13 @@ for paper in response.results:
 
 const valyu = new Valyu({ apiKey: '<your_api_key>' });
 
-// Search for academic papers
+// Find non-patent prior art (scientific literature)
 const response = await valyu.search({
-    query: 'transformer architecture attention mechanism',
-    includedSources: ['valyu/valyu-arxiv'], // or leave this empty and we'll figure it out for you
+    query: 'transformer attention mechanism prior art before 2017',
+    includedSources: ['valyu/valyu-arxiv'],
 });
 
-// Get paper details
+// Access the results
 response.results.forEach(paper => {
 });`,
       },
@@ -103,123 +155,8 @@ response.results.forEach(paper => {
   -H "x-api-key: <your_api_key>" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "query": "transformer architecture attention mechanism",
-    "included_sources": ["valyu/valyu-arxiv"] # or leave this empty and we'll figure it out for you
-  }'`,
-      },
-    ],
-  },
-  {
-    name: "Clinical Trials",
-    src: "/clinicaltrials.svg",
-    description: "Clinical trial data from ClinicalTrials.gov",
-    snippets: [
-      {
-        language: "Python",
-        code: `from valyu import Valyu
-
-valyu = Valyu(api_key="<your_api_key>")
-
-# Search for clinical trials
-response = valyu.search(
-    "pembrolizumab NSCLC Phase 3 trials",
-    included_sources=[
-        "valyu/valyu-clinical-trials"
-    ] # or leave this empty and we'll figure it out for you
-)
-
-# Extract clinical trial data
-for trial in response.results:
-    print(f"Trial ID: {trial.metadata.get('nct_id')}")
-    print(f"Phase: {trial.metadata.get('phase')}")
-    print(f"Status: {trial.metadata.get('status')}")
-    print(f"Data: {trial.content}")`,
-      },
-      {
-        language: "TypeScript",
-        code: `import { Valyu } from 'valyu';
-
-const valyu = new Valyu({ apiKey: '<your_api_key>' });
-
-// Search for clinical trials
-const response = await valyu.search({
-    query: 'pembrolizumab NSCLC Phase 3 trials',
-    includedSources: [
-        "valyu/valyu-clinical-trials"
-    ], // or leave this empty and we'll figure it out for you
-});
-
-// Extract clinical trial data
-response.results.forEach(trial => {
-});`,
-      },
-      {
-        language: "cURL",
-        code: `curl -X POST https://api.valyu.ai/v1/deepsearch \\
-  -H "x-api-key: <your_api_key>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "query": "pembrolizumab NSCLC Phase 3 trials",
-    "included_sources": [
-        "valyu/valyu-clinical-trials"
-    ] # or leave this empty and we'll figure it out for you
-  }'`,
-      },
-    ],
-  },
-  {
-    name: "FDA Drug Labels",
-    src: "/fda.svg",
-    description: "FDA-approved drug information and labels",
-    snippets: [
-      {
-        language: "Python",
-        code: `from valyu import Valyu
-
-valyu = Valyu(api_key="<your_api_key>")
-
-# Search for FDA drug information
-response = valyu.search(
-    "pembrolizumab FDA label dosing information",
-    included_sources=[
-        'valyu/valyu-fda-drug-labels'
-    ] # or leave this empty and we'll figure it out for you
-)
-
-# Get drug information
-for drug in response.results:
-    print(f"Drug: {drug.metadata.get('drug_name')}")
-    print(f"Indication: {drug.metadata.get('indication')}")
-    print(f"Label Info: {drug.content}")`,
-      },
-      {
-        language: "TypeScript",
-        code: `import { Valyu } from 'valyu';
-
-const valyu = new Valyu({ apiKey: '<your_api_key>' });
-
-// Search for FDA drug information
-const response = await valyu.search({
-    query: 'pembrolizumab FDA label dosing information',
-    includedSources: [
-        'valyu/valyu-fda-drug-labels'
-    ], // or leave this empty and we'll figure it out for you
-});
-
-// Get drug information
-response.results.forEach(drug => {
-});`,
-      },
-      {
-        language: "cURL",
-        code: `curl -X POST https://api.valyu.ai/v1/deepsearch \\
-  -H "x-api-key: <your_api_key>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "query": "pembrolizumab FDA label dosing information",
-    "included_sources": [
-        "valyu/valyu-fda-drug-labels"
-    ] # or leave this empty and we'll figure it out for you
+    "query": "transformer attention mechanism prior art before 2017",
+    "included_sources": ["valyu/valyu-arxiv"]
   }'`,
       },
     ],
@@ -227,7 +164,7 @@ response.results.forEach(drug => {
   {
     name: "Web Search",
     src: "/web.svg",
-    description: "General web search with relevance scoring",
+    description: "General web search for products, companies, and technical background",
     snippets: [
       {
         language: "Python",
@@ -235,16 +172,15 @@ response.results.forEach(drug => {
 
 valyu = Valyu(api_key="<your_api_key>")
 
-# Search across the web
+# Search across the web (e.g. accused products for FTO)
 response = valyu.search(
-    "CRISPR gene therapy latest developments 2024"
+    "competitor solid-state battery product specifications 2024"
 )
 
 # Get ranked results
 for result in response.results:
     print(f"Title: {result.title}")
     print(f"URL: {result.metadata.get('url')}")
-    print(f"Relevance: {result.metadata.get('relevance_score')}")
     print(f"Content: {result.content[:200]}...")`,
       },
       {
@@ -253,9 +189,9 @@ for result in response.results:
 
 const valyu = new Valyu({ apiKey: '<your_api_key>' });
 
-// Search across the web
+// Search across the web (e.g. accused products for FTO)
 const response = await valyu.search({
-    query: 'CRISPR gene therapy latest developments 2024'
+    query: 'competitor solid-state battery product specifications 2024'
 });
 
 // Get ranked results
@@ -268,68 +204,7 @@ response.results.forEach(result => {
   -H "x-api-key: <your_api_key>" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "query": "CRISPR gene therapy latest developments 2024"
-  }'`,
-      },
-    ],
-  },
-  {
-    name: "Wiley",
-    src: "/wy.svg",
-    description: "Academic research from Wiley publications",
-    snippets: [
-      {
-        language: "Python",
-        code: `from valyu import Valyu
-
-valyu = Valyu(api_key="<your_api_key>")
-
-# Search Wiley research publications
-response = valyu.search(
-    "immunotherapy mechanisms of action",
-    included_sources=[
-        "valyu/wiley-biomedical-books",
-        "valyu/wiley-biomedical-papers"
-    ] # or leave this empty and we'll pick the best sources for you
-)
-
-# Access research papers
-for paper in response.results:
-    print(f"Title: {paper.title}")
-    print(f"Journal: {paper.metadata.get('journal')}")
-    print(f"DOI: {paper.metadata.get('doi')}")
-    print(f"Abstract: {paper.content[:300]}...")`,
-      },
-      {
-        language: "TypeScript",
-        code: `import { Valyu } from 'valyu';
-
-const valyu = new Valyu({ apiKey: '<your_api_key>' });
-
-// Search Wiley research publications
-const response = await valyu.search({
-    query: 'immunotherapy mechanisms of action',
-    includedSources: [
-        "valyu/wiley-biomedical-books",
-        "valyu/wiley-biomedical-papers"
-    ], // or leave this empty and we'll pick the best sources for you
-});
-
-// Access research papers
-response.results.forEach(paper => {
-});`,
-      },
-      {
-        language: "cURL",
-        code: `curl -X POST https://api.valyu.ai/v1/deepsearch \\
-  -H "x-api-key: <your_api_key>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "query": "immunotherapy mechanisms of action",
-    "included_sources": [
-        "valyu/wiley-biomedical-books",
-        "valyu/wiley-biomedical-papers"
-    ] # or leave this empty and we'll pick the best sources for you
+    "query": "competitor solid-state battery product specifications 2024"
   }'`,
       },
     ],
@@ -345,15 +220,12 @@ const DataSourceLogos = () => {
   const currentPositionRef = useRef(0);
   const animationStartTimeRef = useRef(0);
 
-  // All logos from assets/banner
+  // Patent offices + non-patent-literature sources
   const allLogos = [
-    { name: "PubMed", src: "/assets/banner/pubmed.png" },
-    { name: "ClinicalTrials", src: "/assets/banner/clinicaltrials.png" },
-    { name: "bioRxiv", src: "/assets/banner/biorxiv.png" },
-    { name: "medRxiv", src: "/assets/banner/medrxiv.png" },
-    { name: "arXiv", src: "/assets/banner/arxiv.png" },
-    { name: "WHO", src: "/assets/banner/who.png" },
     { name: "USPTO", src: "/assets/banner/uspto.png" },
+    { name: "EPO", src: "/assets/banner/epo.svg" },
+    { name: "WIPO", src: "/assets/banner/wipo.svg" },
+    { name: "arXiv", src: "/assets/banner/arxiv.png" },
   ];
 
   // Duplicate logos for seamless infinite scroll

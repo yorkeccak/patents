@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { tool } from "ai";
+import { tool, generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
 import { Valyu } from "valyu-js";
 import { track } from "@vercel/analytics/server";
 import { Daytona } from '@daytonaio/sdk';
@@ -57,9 +58,13 @@ async function callValyuApi(
     // proxy body, so read both casings or the source restriction silently
     // no-ops on the server-key path.
     if (path === '/v1/search' || path === '/v1/deepsearch') {
+      const startDate = (body.startDate ?? body.start_date) as string | undefined;
+      const endDate = (body.endDate ?? body.end_date) as string | undefined;
       return valyu.search(body.query as string, {
         maxNumResults: (body.maxNumResults ?? body.max_num_results) as number,
         includedSources: (body.includedSources ?? body.included_sources) as string[],
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
       });
     }
 
@@ -608,8 +613,12 @@ ${execution.result || '(No output produced)'}
       maxResults: z.number().min(1).max(10).optional().default(6).describe('Number of results (default: 6, max: 10). Keep this small - patent documents are large; request only what you need and use readFullPatent to drill into specific patents.'),
       jurisdiction: z.enum(['us', 'ep', 'all']).optional().default('all')
         .describe('Patent office to search: "us" (USPTO), "ep" (European Patent Office), or "all" (both, default). Use "us" for US-only prosecution/FTO, "ep" for European FTO, "all" for novelty and landscape searches.'),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional()
+        .describe('Only return patents published on or after this date (YYYY-MM-DD). Derive this from the user\'s date range, e.g. "patents since 2020" -> "2020-01-01", "2018-2022" -> startDate "2018-01-01".'),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional()
+        .describe('Only return patents published on or before this date (YYYY-MM-DD). Derive from the user\'s range, e.g. "2018-2022" -> endDate "2022-12-31".'),
     }),
-    execute: async ({ query, maxResults, jurisdiction }, options) => {
+    execute: async ({ query, maxResults, jurisdiction, startDate, endDate }, options) => {
       const userId = (options as any)?.experimental_context?.userId;
       const sessionId = (options as any)?.experimental_context?.sessionId;
       const userTier = (options as any)?.experimental_context?.userTier;
@@ -640,23 +649,48 @@ ${execution.result || '(No output produced)'}
         const selected = jurisdiction ?? 'all';
         const includedSources = JURISDICTION_SOURCES[selected];
 
+        // The Valyu date params bias relevance but do NOT hard-filter patent
+        // results, so we over-fetch when a date range is set and enforce the
+        // range ourselves below. Capped at the API's max of 20.
+        const hasDateFilter = !!(startDate || endDate);
+        const fetchCount = hasDateFilter ? Math.min(20, clampedMaxResults * 3) : clampedMaxResults;
+
         // Call Valyu API (via proxy if user has OAuth token, otherwise direct)
         const response = await callValyuApi(
           '/v1/deepsearch',
           {
             query,
-            max_num_results: clampedMaxResults,
+            max_num_results: fetchCount,
             included_sources: includedSources,
+            // Date hint (publication date). Omit keys when unset.
+            ...(startDate ? { start_date: startDate } : {}),
+            ...(endDate ? { end_date: endDate } : {}),
           },
           valyuAccessToken
         );
 
         console.log("[PatentSearch] Response received, results:", response?.results?.length || 0);
 
+        // Enforce the date range by publication date (the API does not), then
+        // trim back to the number of results the caller actually asked for.
+        const inRange = (p: any): boolean => {
+          if (!hasDateFilter) return true;
+          const pub = p?.publication_date || p?.metadata?.date_published;
+          if (!pub) return false; // no date -> can't confirm it's in range, drop it
+          const d = String(pub).slice(0, 10);
+          if (startDate && d < startDate) return false;
+          if (endDate && d > endDate) return false;
+          return true;
+        };
+        const filteredResults = (response?.results || []).filter(inRange).slice(0, clampedMaxResults);
+        if (hasDateFilter) {
+          console.log(`[PatentSearch] Date filter ${startDate || '*'}..${endDate || '*'}: ${response?.results?.length || 0} -> ${filteredResults.length} in range`);
+        }
+
         await track("Valyu API Call", {
           toolType: "patentSearch",
           query: query,
-          resultCount: response?.results?.length || 0,
+          resultCount: filteredResults.length,
         });
 
         // Cache full patent content and return truncated results
@@ -678,7 +712,7 @@ ${execution.result || '(No output produced)'}
         }
 
         const truncatedResults = await Promise.all(
-          (response?.results || []).map(async (patent: any, index: number) => {
+          filteredResults.map(async (patent: any, index: number) => {
             // The API returns a rich structured metadata object - prefer it and
             // use content parsing only as a fallback for fields it omits.
             const apiMeta = (patent.metadata || {}) as Record<string, any>;
@@ -815,12 +849,13 @@ ${execution.result || '(No output produced)'}
           type: "patents",
           query: query,
           jurisdiction: selected,
+          ...(hasDateFilter ? { dateFilter: { startDate: startDate || null, endDate: endDate || null } } : {}),
           resultCount: truncatedResults.length,
           results: truncatedResults,
           displaySource,
-          note: `IMPORTANT: Abstracts only - Full content cached for session ${cacheStats.sessionId} (${cacheStats.patentsCached} patents). To access complete patent details (claims, description, citations, figures), use readFullPatent tool with the patentIndex field from these results. Example: readFullPatent({patentIndex: 0}) for the first patent, readFullPatent({patentIndex: 2}) for the third patent, etc.`,
+          note: `IMPORTANT: Abstracts only${hasDateFilter ? `, filtered to publication dates ${startDate || 'any'}..${endDate || 'any'}` : ''} - Full content cached for session ${cacheStats.sessionId} (${cacheStats.patentsCached} patents). To access complete patent details (claims, description, citations, figures), use readFullPatent tool with the patentIndex field from these results. Example: readFullPatent({patentIndex: 0}) for the first patent, readFullPatent({patentIndex: 2}) for the third patent, etc.`,
           _debug: cacheStats,
-        }, null, 2);
+        });
       } catch (error) {
         return `❌ Error searching patents: ${error instanceof Error ? error.message : 'Unknown error'}`;
       }
@@ -959,13 +994,80 @@ ${execution.result || '(No output produced)'}
           figureLabels,
           sections: parsedSections,
           note: 'Use this detailed information to create element-by-element claim charts (cite col:line / paragraph / FIG. N), perform jurisdiction-specific FTO analysis on in-force granted claims, or conduct deep technical comparison. Every legal/validity statement must cite the exact patent and passage.'
-        }, null, 2);
+        });
 
       } catch (error) {
         return JSON.stringify({
           error: true,
           message: `Failed to retrieve patent: ${error instanceof Error ? error.message : 'Unknown error'}`
         });
+      }
+    },
+  }),
+
+  analyzePatents: tool({
+    description: `Deeply read and synthesize the FULL TEXT of one or more patents (claims, description, citations) to answer a specific analytical question. Use this INSTEAD of readFullPatent whenever the user wants analysis - claim charts, FTO assessment, prior-art mapping, novelty, or technical comparison across patents.
+
+    This runs a dedicated patent-analyst subagent that reads the full documents in an isolated context and returns ONLY a compact, citation-rich synthesis - so deep analysis does not bloat the conversation.
+
+    Provide the patentIndex values (from your most recent patentSearch) and a precise task, e.g. "element-by-element claim chart for claim 1 of patentIndex 0 versus patentIndex 2" or "is patentIndex 3 anticipated by patentIndex 1?".`,
+    inputSchema: z.object({
+      task: z.string().describe('The precise analysis question, including which patents to compare and what output is wanted (e.g. claim chart, FTO, novelty assessment).'),
+      patentIndices: z.array(z.number().min(0).max(19)).min(1).max(5)
+        .describe('patentIndex values from the most recent patentSearch (1-5 patents).'),
+    }),
+    execute: async ({ task, patentIndices }, options) => {
+      const sessionId = (options as any)?.experimental_context?.sessionId;
+      const abortSignal = (options as any)?.abortSignal;
+
+      if (!sessionId) {
+        return JSON.stringify({ error: true, message: 'No active session. Run patentSearch first, then retry.' });
+      }
+
+      try {
+        const { getFullPatent } = await import('./db');
+        const { parsePatentSections } = await import('./patent-utils');
+
+        // Build the heavy context for the subagent ONLY. A high per-section cap
+        // is fine here because this content is ephemeral - it lives in the
+        // subagent's prompt and never enters the main conversation.
+        const docs: string[] = [];
+        for (const idx of patentIndices) {
+          const { data: cached } = await getFullPatent(sessionId, idx);
+          if (!cached) continue;
+          const content = (cached as any).fullContent || (cached as any).full_content || '';
+          const num = (cached as any).patentNumber || (cached as any).patent_number || `patentIndex ${idx}`;
+          const sections = parsePatentSections(content, ['all'], 30000);
+          docs.push(
+            `=== ${num} (patentIndex ${idx}) — ${(cached as any).title || ''} ===\n` +
+            (sections.abstract ? `ABSTRACT:\n${sections.abstract}\n\n` : '') +
+            (sections.claims ? `CLAIMS:\n${sections.claims}\n\n` : '') +
+            (sections.description ? `DESCRIPTION:\n${sections.description}\n\n` : '') +
+            (sections.citations ? `CITATIONS:\n${sections.citations}\n` : '')
+          );
+        }
+
+        if (!docs.length) {
+          return JSON.stringify({ error: true, message: 'None of the requested patents were found in cache. Run a fresh patentSearch (cache lasts 1 hour) and retry.' });
+        }
+
+        // Mirror the main route's model selection (direct key vs gateway).
+        const model = process.env.OPENAI_API_KEY ? openai('gpt-5.4-mini') : 'openai/gpt-5.4-mini';
+
+        const { text } = await generateText({
+          model,
+          maxOutputTokens: 2000,
+          abortSignal,
+          system: 'You are an expert patent analyst. Read the provided full-text patents and answer the task precisely. For every claim or legal statement, cite the patent number and the exact location (column:line, paragraph, or FIG. N). When asked for a claim chart, decompose the independent claim into discrete limitations and map each to a specific passage. Be concise and return only the finished analysis - no preamble.',
+          prompt: `TASK:\n${task}\n\nPATENTS:\n${docs.join('\n')}`,
+        });
+
+        await track('Valyu API Call', { toolType: 'analyzePatents', query: task, resultCount: docs.length });
+
+        // Only the compact synthesis enters the main conversation.
+        return JSON.stringify({ type: 'patent_analysis', task, patentsAnalyzed: patentIndices, analysis: text });
+      } catch (error) {
+        return JSON.stringify({ error: true, message: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
       }
     },
   }),
@@ -997,12 +1099,21 @@ ${execution.result || '(No output produced)'}
           resultCount: response?.results?.length || 0,
         });
 
+        // Lean projection - the model never needs raw full bodies, and keeping
+        // them out of the result keeps the conversation context small.
+        const lean = (response?.results || []).slice(0, maxResults || 5).map((r: any) => ({
+          title: r.title,
+          url: r.url,
+          source: r.source,
+          snippet: typeof r.content === 'string' ? r.content.slice(0, 1200) : undefined,
+        }));
+
         return JSON.stringify({
           type: "web_search",
           query: query,
-          resultCount: response?.results?.length || 0,
-          results: response?.results || [],
-        }, null, 2);
+          resultCount: lean.length,
+          results: lean,
+        });
       } catch (error) {
         return `❌ Error performing web search: ${error instanceof Error ? error.message : 'Unknown error'}`;
       }
@@ -1016,8 +1127,8 @@ export function getToolsForUser(isAuthenticated: boolean) {
     return healthcareTools;
   }
 
-  // For anonymous users, exclude readFullPatent
-  const { readFullPatent, ...anonymousTools } = healthcareTools;
+  // For anonymous users, exclude the cache-backed deep-read tools
+  const { readFullPatent, analyzePatents, ...anonymousTools } = healthcareTools;
   return anonymousTools;
 }
 

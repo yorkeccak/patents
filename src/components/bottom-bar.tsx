@@ -16,9 +16,9 @@ const BottomBar = () => {
         {/* Social Links */}
         <SocialLinks />
 
-        {/* Medical Disclaimer */}
+        {/* Disclaimer */}
         <p className="text-[10px] sm:text-xs text-muted-foreground">
-          Not medical advice.
+          Not legal advice.
         </p>
       </motion.div>
     </>
