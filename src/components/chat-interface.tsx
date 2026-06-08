@@ -88,6 +88,7 @@ import { calculateMessageMetrics, MessageMetrics } from "@/lib/metrics-calculato
 import { MetricsPills } from "@/components/metrics-pills";
 import { PatentCard } from "@/components/patent-card";
 import { PatentDetailsPanel } from "@/components/patent-details-panel";
+import { getOffice } from "@/lib/patent-utils";
 
 // Debug toggles removed per request
 
@@ -856,6 +857,7 @@ const extractSearchResults = (jsonOutput: string) => {
         dataType: result.dataType || "unstructured",
         length: result.length,
         imageUrls: result.imageUrl || result.image_url || {},
+        figures: result.figures || [],
         relevanceScore: result.relevanceScore || result.relevance_score || 0,
         metadata: result.metadata || {},
         publication_date: result.publication_date || result.metadata?.date_published,
@@ -926,8 +928,8 @@ const SearchResultCard = ({
                 {type === "patent" ? (
                   <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden p-0.5">
                     <img
-                      src="/assets/banner/uspto.png"
-                      alt="USPTO"
+                      src={getOffice(result.metadata?.country).logo}
+                      alt={getOffice(result.metadata?.country).label}
                       className="w-full h-full object-contain"
                     />
                   </div>
@@ -1009,8 +1011,8 @@ const SearchResultCard = ({
                 {type === "patent" ? (
                   <div className="w-5 h-5 rounded bg-muted flex items-center justify-center overflow-hidden p-0.5">
                     <img
-                      src="/assets/banner/uspto.png"
-                      alt="USPTO"
+                      src={getOffice(result.metadata?.country).logo}
+                      alt={getOffice(result.metadata?.country).label}
                       className="w-full h-full object-contain"
                     />
                   </div>
@@ -1306,6 +1308,7 @@ const SearchResultsCarousel = memo(function SearchResultsCarousel({
                   content: result.fullContent || result.content || '',
                   publication_date: result.publication_date,
                   metadata: result.metadata,
+                  figures: result.figures,
                   relevance_score: result.relevance_score,
                 }}
                 onClick={() => handlePatentClick(result)}
@@ -1346,6 +1349,7 @@ const SearchResultsCarousel = memo(function SearchResultsCarousel({
               filingDate: selectedPatent.filingDate,
               publicationDate: selectedPatent.publicationDate,
               claimsCount: selectedPatent.claimsCount,
+              figures: selectedPatent.figures,
               fullContentCached: selectedPatent.fullContentCached,
             }}
             onClose={() => setSelectedPatent(null)}
@@ -3384,8 +3388,8 @@ export function ChatInterface({
                                                 style={{ zIndex: 5 - idx }}
                                               >
                                                 <img
-                                                  src="/assets/banner/uspto.png"
-                                                  alt="USPTO"
+                                                  src={getOffice(result.metadata?.country).logo}
+                                                  alt={getOffice(result.metadata?.country).label}
                                                   className="w-full h-full object-contain"
                                                 />
                                               </div>

@@ -1,11 +1,14 @@
 'use client';
 
 import React, { memo } from 'react';
-import { X, ExternalLink, Building2, Calendar, Scale, FileText, Users, TrendingUp } from 'lucide-react';
+import { X, ExternalLink, Building2, Calendar, Scale, FileText, Users, TrendingUp, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Streamdown } from 'streamdown';
+import { getPatentDisplay, getKindCodeExplanation, type PatentFigure } from '@/lib/patent-utils';
+import { PatentFigures } from '@/components/patent-figures';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface PatentDetailsPanelProps {
   patent: {
@@ -23,19 +26,27 @@ interface PatentDetailsPanelProps {
     publicationDate?: string;
     claimsCount?: number;
     fullContentCached?: boolean;
+    figures?: PatentFigure[];
     metadata?: {
       patent_number?: string;
       application_number?: string;
       filing_date?: string;
       date_published?: string;
+      priority_date?: string;
       parties_assignees_name?: string;
-      number_of_claims?: string;
+      number_of_claims?: string | number;
       ipcr_section?: string;
       ipcr_class?: string;
       ipcr_subclass?: string;
+      ipc?: string[];
+      cpc?: string[];
       total_citations?: number;
       patent_citations?: number;
       country?: string;
+      kind_code?: string;
+      designated_states?: string[] | string;
+      language?: string;
+      figures?: PatentFigure[];
       examiners?: string;
       bibliographic_data?: any;
     };
@@ -54,10 +65,9 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
     });
   };
 
-  const getStatus = () => {
-    if (!patent.metadata?.date_published) return 'pending';
-    return 'granted';
-  };
+  // Jurisdiction-aware identity (office, ST.16 triplet, kind-code-driven status).
+  const display = getPatentDisplay(patent.metadata, patent.content);
+  const figures = patent.figures || patent.metadata?.figures || [];
 
   const getIPCClass = () => {
     const { ipcr_section, ipcr_class, ipcr_subclass } = patent.metadata || {};
@@ -66,6 +76,10 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
     }
     return null;
   };
+
+  const designatedStates = Array.isArray(patent.metadata?.designated_states)
+    ? patent.metadata?.designated_states.join(', ')
+    : patent.metadata?.designated_states;
 
   const extractAbstract = () => {
     // If we have the abstract field directly (from patentSearch), use it
@@ -89,7 +103,6 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
                           patent.content.includes('DESCRIPTION') ||
                           patent.content.includes('CLAIMS'));
 
-  const status = getStatus();
   const ipcClass = getIPCClass();
 
   return (
@@ -100,23 +113,35 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <img
-                src="/assets/banner/uspto.png"
-                alt="USPTO"
+                src={display.office.logo}
+                alt={display.office.label}
+                title={display.office.name}
                 className="w-5 h-5 object-contain"
               />
               <code className="text-sm font-bold text-foreground font-mono">
-                US {patent.metadata?.patent_number || patent.id}
+                {display.formatted || patent.id}
               </code>
-              <Badge
-                variant={status === 'granted' ? 'default' : 'secondary'}
-                className={`text-[10px] px-2 py-0 ${
-                  status === 'granted'
-                    ? 'bg-primary/10 text-primary border-primary/30'
-                    : 'bg-primary/10 text-primary border-primary/30'
-                }`}
-              >
-                {status === 'granted' ? 'Granted' : 'Pending'}
-              </Badge>
+              {(() => {
+                const explanation = getKindCodeExplanation(display.country, display.kindCode);
+                const badge = (
+                  <Badge
+                    variant={display.status === 'granted' ? 'default' : 'secondary'}
+                    className="text-[10px] px-2 py-0 bg-primary/10 text-primary border-primary/30 cursor-help"
+                  >
+                    {display.statusLabel}
+                  </Badge>
+                );
+                return explanation ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>{badge}</TooltipTrigger>
+                      <TooltipContent className="max-w-[260px] text-xs">
+                        <span className="font-mono font-semibold">{display.kindCode}</span> — {explanation}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : badge;
+              })()}
             </div>
             <h2 className="text-base font-semibold text-foreground leading-snug">
               {patent.title}
@@ -138,7 +163,7 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
             <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
               <a href={patent.url} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="w-3 h-3 mr-1" />
-                View USPTO
+                View on {display.office.label}
               </a>
             </Button>
           )}
@@ -224,16 +249,58 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
               </div>
             )}
 
-            {ipcClass && (
+            {patent.metadata?.priority_date && (
               <div>
+                <div className="flex items-center gap-1 mb-1">
+                  <Calendar className="w-3 h-3 text-muted-foreground" />
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Priority
+                  </div>
+                </div>
+                <div className="text-sm text-foreground">
+                  {formatDate(patent.metadata.priority_date)}
+                </div>
+              </div>
+            )}
+
+            {(patent.metadata?.cpc?.length || patent.metadata?.ipc?.length || ipcClass) && (
+              <div className="col-span-2">
                 <div className="flex items-center gap-1 mb-1">
                   <FileText className="w-3 h-3 text-muted-foreground" />
                   <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    IPC Class
+                    Classification
                   </div>
                 </div>
-                <div className="text-sm font-mono text-foreground">
-                  {ipcClass}
+                <div className="flex flex-wrap gap-1.5">
+                  {patent.metadata?.cpc?.slice(0, 6).map((c) => (
+                    <Badge key={`cpc-${c}`} variant="secondary" className="text-[10px] font-mono px-1.5 py-0">
+                      CPC {c}
+                    </Badge>
+                  ))}
+                  {patent.metadata?.ipc?.slice(0, 6).map((c) => (
+                    <Badge key={`ipc-${c}`} variant="outline" className="text-[10px] font-mono px-1.5 py-0">
+                      IPC {c}
+                    </Badge>
+                  ))}
+                  {!patent.metadata?.cpc?.length && !patent.metadata?.ipc?.length && ipcClass && (
+                    <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
+                      IPC {ipcClass}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {designatedStates && (
+              <div className="col-span-2">
+                <div className="flex items-center gap-1 mb-1">
+                  <Globe className="w-3 h-3 text-muted-foreground" />
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Designated States
+                  </div>
+                </div>
+                <div className="text-sm text-foreground break-words">
+                  {designatedStates}
                 </div>
               </div>
             )}
@@ -283,6 +350,14 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
                   )}
                 </div>
               </div>
+            </>
+          )}
+
+          {/* Figures / Drawings */}
+          {figures.length > 0 && (
+            <>
+              <Separator />
+              <PatentFigures figures={figures} />
             </>
           )}
 
