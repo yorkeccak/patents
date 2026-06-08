@@ -41,7 +41,7 @@ const PATENT_NUM_RE = /\b([A-Z]{2})\s*((?:RE|PP|D|H)?\d[\d,]{2,})\s*([A-Z]\d?)?\
 /** WIPO ST.16 / office logo + flag metadata, used for jurisdiction-aware UI. */
 export const PATENT_OFFICES = {
   US: { label: 'USPTO', name: 'United States Patent and Trademark Office', logo: '/assets/banner/uspto.png', flag: '🇺🇸' },
-  EP: { label: 'EPO', name: 'European Patent Office', logo: '/assets/banner/epo.svg', flag: '🇪🇺' },
+  EP: { label: 'EPO', name: 'European Patent Office', logo: '/assets/banner/epo.jpg', flag: '🇪🇺' },
   WO: { label: 'WIPO', name: 'World Intellectual Property Organization', logo: '/assets/banner/wipo.svg', flag: '🌐' },
 } as const;
 

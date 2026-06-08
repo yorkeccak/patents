@@ -19,7 +19,7 @@ const SocialLinks = () => {
     },
     {
       name: "GitHub",
-      url: "https://github.com/yourusername/patentai/",
+      url: "https://github.com/yorkeccak/patents",
       icon: <Github className="h-4 w-4" />,
     },
   ];
