@@ -605,7 +605,7 @@ ${execution.result || '(No output produced)'}
     - Citation data (forward and backward citations)`,
     inputSchema: z.object({
       query: z.string().describe('Natural language patent search query (e.g., "Google AI patents 2024", "Tesla battery patents 2020-2024")'),
-      maxResults: z.number().min(1).max(20).optional().default(10).describe('Number of results (default: 10, max: 20)'),
+      maxResults: z.number().min(1).max(10).optional().default(6).describe('Number of results (default: 6, max: 10). Keep this small - patent documents are large; request only what you need and use readFullPatent to drill into specific patents.'),
       jurisdiction: z.enum(['us', 'ep', 'all']).optional().default('all')
         .describe('Patent office to search: "us" (USPTO), "ep" (European Patent Office), or "all" (both, default). Use "us" for US-only prosecution/FTO, "ep" for European FTO, "all" for novelty and landscape searches.'),
     }),
@@ -625,8 +625,9 @@ ${execution.result || '(No output produced)'}
           return "❌ Valyu API not configured. Please sign in with Valyu or configure server API key.";
         }
 
-        // Ensure maxNumResults is within API limits (1-20)
-        const clampedMaxResults = Math.min(Math.max(maxResults || 10, 1), 20);
+        // Keep result counts small - patent documents are large and the
+        // truncated results still accumulate in the model's context.
+        const clampedMaxResults = Math.min(Math.max(maxResults || 6, 1), 10);
 
         // Map the requested jurisdiction to the public Valyu patent source ids.
         // Keep this a flat map of the two approved consumer source ids - no
@@ -766,6 +767,11 @@ ${execution.result || '(No output produced)'}
               console.warn('[PatentSearch] No sessionId - skipping cache');
             }
 
+            // Figures (signed image URLs) are large and useless to the model -
+            // they are cached above and fetched by the UI from /api/patents/figures.
+            // Only the COUNT goes into the tool result the model ingests.
+            const { figures: _figures, ...metadataForModel } = displayMetadata;
+
             // Return truncated version with just abstract
             return {
               patentIndex: index,
@@ -781,9 +787,8 @@ ${execution.result || '(No output produced)'}
               filingDate: displayMetadata.filing_date,
               publicationDate: displayMetadata.date_published,
               claimsCount: displayMetadata.number_of_claims,
-              figures,
-              imageUrl: patent.image_url || patent.imageUrl || {},
-              metadata: displayMetadata,
+              figureCount: figures.length,
+              metadata: metadataForModel,
               relevance_score: patent.relevance_score,
               fullContentCached: !!sessionId,
               // Keep original fields for UI compatibility
@@ -921,15 +926,22 @@ ${execution.result || '(No output produced)'}
         }
 
         const fullContent = cachedPatent.fullContent || cachedPatent.full_content || '';
-        // Surface figures (cached at search time, else re-derived) and
-        // classifications so the model can cite FIG. N and CPC/IPC in charts.
-        const figures = metadata?.figures?.length
-          ? metadata.figures
-          : extractPatentFigures(fullContent);
         const classifications = {
           ipc: metadata?.ipc || extractClassifications(fullContent).ipc,
           cpc: metadata?.cpc || extractClassifications(fullContent).cpc,
         };
+
+        // Figures: give the model only labels/count for citing "FIG. N" - the
+        // signed image URLs are large and are rendered by the UI from the
+        // cache, never sent into the model's context.
+        const cachedFigures = metadata?.figures?.length
+          ? metadata.figures
+          : extractPatentFigures(fullContent);
+        const figureLabels = cachedFigures
+          .map((f: any, i: number) => f.label || `FIG. ${i + 1}`);
+
+        // Don't echo the cached figure URLs back through the model.
+        const { figures: _figs, ...metadataForModel } = metadata || {};
 
         return JSON.stringify({
           success: true,
@@ -941,9 +953,10 @@ ${execution.result || '(No output produced)'}
           priorityDate: metadata?.priority_date,
           title: cachedPatent.title,
           url: cachedPatent.url,
-          metadata: metadata,
+          metadata: metadataForModel,
           classifications,
-          figures,
+          figureCount: cachedFigures.length,
+          figureLabels,
           sections: parsedSections,
           note: 'Use this detailed information to create element-by-element claim charts (cite col:line / paragraph / FIG. N), perform jurisdiction-specific FTO analysis on in-force granted claims, or conduct deep technical comparison. Every legal/validity statement must cite the exact patent and passage.'
         }, null, 2);

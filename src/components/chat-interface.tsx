@@ -857,7 +857,7 @@ const extractSearchResults = (jsonOutput: string) => {
         dataType: result.dataType || "unstructured",
         length: result.length,
         imageUrls: result.imageUrl || result.image_url || {},
-        figures: result.figures || [],
+        figureCount: result.figureCount || 0,
         relevanceScore: result.relevanceScore || result.relevance_score || 0,
         metadata: result.metadata || {},
         publication_date: result.publication_date || result.metadata?.date_published,
@@ -1215,9 +1215,11 @@ const SearchResultCard = ({
 const SearchResultsCarousel = memo(function SearchResultsCarousel({
   results,
   type,
+  sessionId,
 }: {
   results: any[];
   type: "web" | "patent";
+  sessionId?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const imagesScrollRef = useRef<HTMLDivElement>(null);
@@ -1308,7 +1310,7 @@ const SearchResultsCarousel = memo(function SearchResultsCarousel({
                   content: result.fullContent || result.content || '',
                   publication_date: result.publication_date,
                   metadata: result.metadata,
-                  figures: result.figures,
+                  figureCount: result.figureCount,
                   relevance_score: result.relevance_score,
                 }}
                 onClick={() => handlePatentClick(result)}
@@ -1349,9 +1351,9 @@ const SearchResultsCarousel = memo(function SearchResultsCarousel({
               filingDate: selectedPatent.filingDate,
               publicationDate: selectedPatent.publicationDate,
               claimsCount: selectedPatent.claimsCount,
-              figures: selectedPatent.figures,
               fullContentCached: selectedPatent.fullContentCached,
             }}
+            sessionId={sessionId}
             onClose={() => setSelectedPatent(null)}
           />
         </div>
@@ -3430,6 +3432,7 @@ export function ChatInterface({
                                         <SearchResultsCarousel
                                           results={patentResults}
                                           type="patent"
+                                          sessionId={currentSessionId}
                                         />
                                       )}
                                     </TimelineStep>

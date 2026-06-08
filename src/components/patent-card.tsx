@@ -1,11 +1,10 @@
 'use client';
 
 import React, { useState, memo } from 'react';
-import { Calendar, Building2, FileText, Scale, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, Building2, FileText, Scale, Copy, Check, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { getPatentDisplay, type PatentFigure } from '@/lib/patent-utils';
-import { PatentFigures } from '@/components/patent-figures';
+import { getPatentDisplay } from '@/lib/patent-utils';
 
 interface PatentCardProps {
   patent: {
@@ -14,7 +13,7 @@ interface PatentCardProps {
     url?: string;
     content: string;
     publication_date?: string;
-    figures?: PatentFigure[];
+    figureCount?: number;
     metadata?: {
       patent_number?: string;
       application_number?: string;
@@ -48,7 +47,7 @@ export const PatentCard = memo(function PatentCard({ patent, onClick, onCompare,
 
   // Jurisdiction-aware identity (office, ST.16 triplet, kind-code-driven status).
   const display = getPatentDisplay(patent.metadata, patent.content);
-  const figures = patent.figures || [];
+  const figureCount = patent.figureCount || 0;
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -181,10 +180,11 @@ export const PatentCard = memo(function PatentCard({ patent, onClick, onCompare,
         </p>
       )}
 
-      {/* Figures preview - searchers triage by scanning drawings first */}
-      {figures.length > 0 && (
-        <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-          <PatentFigures figures={figures} maxThumbnails={4} compact />
+      {/* Figure count - drawings load in the details panel on open */}
+      {figureCount > 0 && (
+        <div className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground">
+          <ImageIcon className="w-3 h-3" />
+          <span>{figureCount} {figureCount === 1 ? 'figure' : 'figures'}</span>
         </div>
       )}
 
