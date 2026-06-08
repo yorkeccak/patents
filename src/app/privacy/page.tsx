@@ -26,7 +26,7 @@ export default function PrivacyPolicy() {
             <h2 className="text-xl font-semibold text-foreground mb-4">2. How We Use Your Information</h2>
             <ul className="list-disc pl-6 text-foreground space-y-2">
               <li>To provide and improve our services</li>
-              <li>To process queries through OpenAI GPT-5 and Valyu API</li>
+              <li>To process queries through OpenAI GPT-5.4-mini and Valyu API</li>
               <li>To execute code through Daytona services</li>
               <li>To authenticate users via Supabase Auth</li>
               <li>To process payments and billing</li>

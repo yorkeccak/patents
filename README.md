@@ -157,7 +157,7 @@ Ollama provides unlimited, private LLM inference on your local machine.
 ## Architecture
 
 - **Frontend**: Next.js 15 with App Router, Tailwind CSS, shadcn/ui
-- **AI**: OpenAI GPT-4 + Ollama/LM Studio for local models
+- **AI**: OpenAI GPT-5.4-mini + Ollama/LM Studio for local models
 - **Data**: Valyu API for comprehensive patent data (USPTO and EPO)
 - **Code Execution**: Daytona sandboxes for secure Python execution
 - **Visualizations**: Recharts for interactive charts
