@@ -220,9 +220,14 @@ export async function POST(req: Request) {
       messages: await convertToModelMessages(messages),
       tools,
       toolChoice: "auto",
-      stopWhen: stepCountIs(12),   // hard cap on the agentic tool loop
-      maxOutputTokens: 4000,       // bound per-step generation
-      prepareStep,                 // compaction safety net (see above)
+      // Hard cap on the agentic tool loop (per request). Do NOT set
+      // maxOutputTokens here: this app streams long, thorough reports and a
+      // low output cap ends the stream with finishReason "length" mid-answer
+      // (no error surfaced) - which reads as "it just stops". Reasoning tokens
+      // also count toward the output budget, making a low cap worse. Context
+      // is bounded on the INPUT side (subagent, lean tool outputs, pruneMessages).
+      stopWhen: stepCountIs(24),
+      prepareStep,                 // input-side compaction safety net (see above)
       experimental_context: {
         userId: user?.id,
         sessionId,
