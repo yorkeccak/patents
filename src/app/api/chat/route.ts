@@ -126,17 +126,17 @@ export async function POST(req: Request) {
         }
       } catch (error) {
         console.error(`[Chat API] Local provider error (${localProvider}):`, error);
-        selectedModel = hasOpenAIKey ? openai("gpt-5.1") : "openai/gpt-5";
+        selectedModel = hasOpenAIKey ? openai("gpt-5.4-mini") : "openai/gpt-5.4-mini";
         modelInfo = hasOpenAIKey
-          ? "OpenAI (gpt-5) - Development Mode Fallback"
-          : 'Vercel AI Gateway ("gpt-5") - Development Mode Fallback';
+          ? "OpenAI (gpt-5.4-mini) - Development Mode Fallback"
+          : 'Vercel AI Gateway ("gpt-5.4-mini") - Development Mode Fallback';
       }
     } else {
       // Production mode: Use OpenAI
-      selectedModel = hasOpenAIKey ? openai("gpt-5") : "openai/gpt-5";
+      selectedModel = hasOpenAIKey ? openai("gpt-5.4-mini") : "openai/gpt-5.4-mini";
       modelInfo = hasOpenAIKey
-        ? `OpenAI (gpt-5) - Production Mode (${user ? 'Valyu User' : 'Anonymous'})`
-        : `Vercel AI Gateway ("gpt-5") - Production Mode (${user ? 'Valyu User' : 'Anonymous'})`;
+        ? `OpenAI (gpt-5.4-mini) - Production Mode (${user ? 'Valyu User' : 'Anonymous'})`
+        : `Vercel AI Gateway ("gpt-5.4-mini") - Production Mode (${user ? 'Valyu User' : 'Anonymous'})`;
     }
 
     console.log("[Chat API] Model selected:", modelInfo);

@@ -22,7 +22,7 @@ export default function TermsOfService() {
               Our service provides AI-powered patents research and analysis tools using:
             </p>
             <ul className="list-disc pl-6 text-foreground space-y-2">
-              <li>OpenAI GPT-5 for natural language processing</li>
+              <li>OpenAI GPT-5.4-mini for natural language processing</li>
               <li>Valyu API for data search and retrieval</li>
               <li>Daytona for code execution</li>
               <li>Supabase for authentication and data storage</li>
