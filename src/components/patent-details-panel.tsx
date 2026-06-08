@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import { X, ExternalLink, Building2, Calendar, Scale, FileText, Users, TrendingUp, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,9 +53,11 @@ interface PatentDetailsPanelProps {
     relevance_score?: number;
   };
   onClose: () => void;
+  /** Used to lazily fetch figure image URLs from the cache (kept out of the model's context). */
+  sessionId?: string;
 }
 
-export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onClose }: PatentDetailsPanelProps) {
+export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onClose, sessionId }: PatentDetailsPanelProps) {
   const formatDate = (date?: string) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-US', {
@@ -67,7 +69,24 @@ export const PatentDetailsPanel = memo(function PatentDetailsPanel({ patent, onC
 
   // Jurisdiction-aware identity (office, ST.16 triplet, kind-code-driven status).
   const display = getPatentDisplay(patent.metadata, patent.content);
-  const figures = patent.figures || patent.metadata?.figures || [];
+
+  // Figures are fetched on demand (signed URLs are not carried in the tool
+  // result that the model ingests). Fall back to any figures passed directly.
+  const [fetchedFigures, setFetchedFigures] = useState<PatentFigure[]>([]);
+  const figures = fetchedFigures.length
+    ? fetchedFigures
+    : (patent.figures || patent.metadata?.figures || []);
+
+  useEffect(() => {
+    if (patent.figures?.length || patent.metadata?.figures?.length) return;
+    if (!sessionId || patent.patentIndex === undefined) return;
+    let cancelled = false;
+    fetch(`/api/patents/figures?sessionId=${encodeURIComponent(sessionId)}&index=${patent.patentIndex}`)
+      .then((r) => (r.ok ? r.json() : { figures: [] }))
+      .then((d) => { if (!cancelled && Array.isArray(d.figures)) setFetchedFigures(d.figures); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [sessionId, patent.patentIndex, patent.figures, patent.metadata?.figures]);
 
   const getIPCClass = () => {
     const { ipcr_section, ipcr_class, ipcr_subclass } = patent.metadata || {};
