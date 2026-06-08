@@ -61,7 +61,7 @@ response.results.forEach(patent => {
   },
   {
     name: "EPO Patents",
-    src: "/assets/banner/epo.svg",
+    src: "/assets/banner/epo.jpg",
     description: "European Patent Office grants and applications, full text with figures",
     snippets: [
       {
@@ -223,7 +223,7 @@ const DataSourceLogos = () => {
   // Patent offices + non-patent-literature sources
   const allLogos = [
     { name: "USPTO", src: "/assets/banner/uspto.png" },
-    { name: "EPO", src: "/assets/banner/epo.svg" },
+    { name: "EPO", src: "/assets/banner/epo.jpg" },
     { name: "WIPO", src: "/assets/banner/wipo.svg" },
     { name: "arXiv", src: "/assets/banner/arxiv.png" },
   ];
