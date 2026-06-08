@@ -224,7 +224,6 @@ const DataSourceLogos = () => {
   const allLogos = [
     { name: "USPTO", src: "/assets/banner/uspto.png" },
     { name: "EPO", src: "/assets/banner/epo.jpg" },
-    { name: "WIPO", src: "/assets/banner/wipo.svg" },
     { name: "arXiv", src: "/assets/banner/arxiv.png" },
   ];
 
