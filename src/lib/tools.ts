@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { tool } from "ai";
+import { tool, generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
 import { Valyu } from "valyu-js";
 import { track } from "@vercel/analytics/server";
 import { Daytona } from '@daytonaio/sdk';
@@ -854,7 +855,7 @@ ${execution.result || '(No output produced)'}
           displaySource,
           note: `IMPORTANT: Abstracts only${hasDateFilter ? `, filtered to publication dates ${startDate || 'any'}..${endDate || 'any'}` : ''} - Full content cached for session ${cacheStats.sessionId} (${cacheStats.patentsCached} patents). To access complete patent details (claims, description, citations, figures), use readFullPatent tool with the patentIndex field from these results. Example: readFullPatent({patentIndex: 0}) for the first patent, readFullPatent({patentIndex: 2}) for the third patent, etc.`,
           _debug: cacheStats,
-        }, null, 2);
+        });
       } catch (error) {
         return `❌ Error searching patents: ${error instanceof Error ? error.message : 'Unknown error'}`;
       }
@@ -993,13 +994,80 @@ ${execution.result || '(No output produced)'}
           figureLabels,
           sections: parsedSections,
           note: 'Use this detailed information to create element-by-element claim charts (cite col:line / paragraph / FIG. N), perform jurisdiction-specific FTO analysis on in-force granted claims, or conduct deep technical comparison. Every legal/validity statement must cite the exact patent and passage.'
-        }, null, 2);
+        });
 
       } catch (error) {
         return JSON.stringify({
           error: true,
           message: `Failed to retrieve patent: ${error instanceof Error ? error.message : 'Unknown error'}`
         });
+      }
+    },
+  }),
+
+  analyzePatents: tool({
+    description: `Deeply read and synthesize the FULL TEXT of one or more patents (claims, description, citations) to answer a specific analytical question. Use this INSTEAD of readFullPatent whenever the user wants analysis - claim charts, FTO assessment, prior-art mapping, novelty, or technical comparison across patents.
+
+    This runs a dedicated patent-analyst subagent that reads the full documents in an isolated context and returns ONLY a compact, citation-rich synthesis - so deep analysis does not bloat the conversation.
+
+    Provide the patentIndex values (from your most recent patentSearch) and a precise task, e.g. "element-by-element claim chart for claim 1 of patentIndex 0 versus patentIndex 2" or "is patentIndex 3 anticipated by patentIndex 1?".`,
+    inputSchema: z.object({
+      task: z.string().describe('The precise analysis question, including which patents to compare and what output is wanted (e.g. claim chart, FTO, novelty assessment).'),
+      patentIndices: z.array(z.number().min(0).max(19)).min(1).max(5)
+        .describe('patentIndex values from the most recent patentSearch (1-5 patents).'),
+    }),
+    execute: async ({ task, patentIndices }, options) => {
+      const sessionId = (options as any)?.experimental_context?.sessionId;
+      const abortSignal = (options as any)?.abortSignal;
+
+      if (!sessionId) {
+        return JSON.stringify({ error: true, message: 'No active session. Run patentSearch first, then retry.' });
+      }
+
+      try {
+        const { getFullPatent } = await import('./db');
+        const { parsePatentSections } = await import('./patent-utils');
+
+        // Build the heavy context for the subagent ONLY. A high per-section cap
+        // is fine here because this content is ephemeral - it lives in the
+        // subagent's prompt and never enters the main conversation.
+        const docs: string[] = [];
+        for (const idx of patentIndices) {
+          const { data: cached } = await getFullPatent(sessionId, idx);
+          if (!cached) continue;
+          const content = (cached as any).fullContent || (cached as any).full_content || '';
+          const num = (cached as any).patentNumber || (cached as any).patent_number || `patentIndex ${idx}`;
+          const sections = parsePatentSections(content, ['all'], 30000);
+          docs.push(
+            `=== ${num} (patentIndex ${idx}) — ${(cached as any).title || ''} ===\n` +
+            (sections.abstract ? `ABSTRACT:\n${sections.abstract}\n\n` : '') +
+            (sections.claims ? `CLAIMS:\n${sections.claims}\n\n` : '') +
+            (sections.description ? `DESCRIPTION:\n${sections.description}\n\n` : '') +
+            (sections.citations ? `CITATIONS:\n${sections.citations}\n` : '')
+          );
+        }
+
+        if (!docs.length) {
+          return JSON.stringify({ error: true, message: 'None of the requested patents were found in cache. Run a fresh patentSearch (cache lasts 1 hour) and retry.' });
+        }
+
+        // Mirror the main route's model selection (direct key vs gateway).
+        const model = process.env.OPENAI_API_KEY ? openai('gpt-5.4-mini') : 'openai/gpt-5.4-mini';
+
+        const { text } = await generateText({
+          model,
+          maxOutputTokens: 2000,
+          abortSignal,
+          system: 'You are an expert patent analyst. Read the provided full-text patents and answer the task precisely. For every claim or legal statement, cite the patent number and the exact location (column:line, paragraph, or FIG. N). When asked for a claim chart, decompose the independent claim into discrete limitations and map each to a specific passage. Be concise and return only the finished analysis - no preamble.',
+          prompt: `TASK:\n${task}\n\nPATENTS:\n${docs.join('\n')}`,
+        });
+
+        await track('Valyu API Call', { toolType: 'analyzePatents', query: task, resultCount: docs.length });
+
+        // Only the compact synthesis enters the main conversation.
+        return JSON.stringify({ type: 'patent_analysis', task, patentsAnalyzed: patentIndices, analysis: text });
+      } catch (error) {
+        return JSON.stringify({ error: true, message: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
       }
     },
   }),
@@ -1031,12 +1099,21 @@ ${execution.result || '(No output produced)'}
           resultCount: response?.results?.length || 0,
         });
 
+        // Lean projection - the model never needs raw full bodies, and keeping
+        // them out of the result keeps the conversation context small.
+        const lean = (response?.results || []).slice(0, maxResults || 5).map((r: any) => ({
+          title: r.title,
+          url: r.url,
+          source: r.source,
+          snippet: typeof r.content === 'string' ? r.content.slice(0, 1200) : undefined,
+        }));
+
         return JSON.stringify({
           type: "web_search",
           query: query,
-          resultCount: response?.results?.length || 0,
-          results: response?.results || [],
-        }, null, 2);
+          resultCount: lean.length,
+          results: lean,
+        });
       } catch (error) {
         return `❌ Error performing web search: ${error instanceof Error ? error.message : 'Unknown error'}`;
       }
@@ -1050,8 +1127,8 @@ export function getToolsForUser(isAuthenticated: boolean) {
     return healthcareTools;
   }
 
-  // For anonymous users, exclude readFullPatent
-  const { readFullPatent, ...anonymousTools } = healthcareTools;
+  // For anonymous users, exclude the cache-backed deep-read tools
+  const { readFullPatent, analyzePatents, ...anonymousTools } = healthcareTools;
   return anonymousTools;
 }
 

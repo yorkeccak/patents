@@ -446,22 +446,31 @@ export interface PatentSections {
   drawings?: string;
 }
 
+/** Truncate a section body to a character budget, flagging the cut. */
+function clampSection(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return text.slice(0, maxChars).trimEnd() +
+    '\n\n…[truncated to save context; request a specific section (e.g. sections: ["claims"]) or use analyzePatents for full-text analysis]';
+}
+
 export function parsePatentSections(
   content: string,
-  requestedSections?: Array<'abstract' | 'claims' | 'description' | 'citations' | 'drawings' | 'all'>
+  requestedSections?: Array<'abstract' | 'claims' | 'description' | 'citations' | 'drawings' | 'all'>,
+  maxCharsPerSection = 8000
 ): PatentSections {
   const sections: PatentSections = {};
   if (!content) return sections;
   const wantAll = !requestedSections || requestedSections.includes('all');
+  const clamp = (t: string) => clampSection(t, maxCharsPerSection);
 
   // Section bodies matched with \n+ so EPO single-newline spacing still parses.
   if (wantAll || requestedSections?.includes('abstract')) {
-    sections.abstract = extractPatentAbstract(content);
+    sections.abstract = clamp(extractPatentAbstract(content));
   }
 
   if (wantAll || requestedSections?.includes('claims')) {
     const claimsMatch = content.match(/##\s*Claims?\s*\n+([\s\S]*?)(?=\n##|$)/i);
-    if (claimsMatch) sections.claims = claimsMatch[1].trim();
+    if (claimsMatch) sections.claims = clamp(claimsMatch[1].trim());
     else if (!wantAll) console.warn('[parsePatentSections] no claims section matched');
   }
 
@@ -473,7 +482,7 @@ export function parsePatentSections(
     for (const pattern of descriptionPatterns) {
       const match = content.match(pattern);
       if (match) {
-        sections.description = match[1].trim();
+        sections.description = clamp(match[1].trim());
         break;
       }
     }
@@ -481,12 +490,12 @@ export function parsePatentSections(
 
   if (wantAll || requestedSections?.includes('drawings')) {
     const drawingsMatch = content.match(/##\s*(?:Description of Drawings|Brief Description of (?:the )?Drawings)\s*\n+([\s\S]*?)(?=\n##|$)/i);
-    if (drawingsMatch) sections.drawings = drawingsMatch[1].trim();
+    if (drawingsMatch) sections.drawings = clamp(drawingsMatch[1].trim());
   }
 
   if (wantAll || requestedSections?.includes('citations')) {
     const citationsMatch = content.match(/##\s*(?:Citations?|References Cited).*?\n+([\s\S]*?)(?=\n##|$)/i);
-    if (citationsMatch) sections.citations = citationsMatch[1].trim();
+    if (citationsMatch) sections.citations = clamp(citationsMatch[1].trim());
   }
 
   return sections;
