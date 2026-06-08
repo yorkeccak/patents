@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="World Intellectual Property Organization">
+  <rect width="64" height="64" rx="12" fill="#0a3b66"/>
+  <circle cx="32" cy="27" r="14" fill="none" stroke="#5bb4e5" stroke-width="2.2"/>
+  <path d="M18 27h28M32 13c6 4 6 24 0 28M32 13c-6 4-6 24 0 28" fill="none" stroke="#5bb4e5" stroke-width="1.6"/>
+  <text x="32" y="56" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="700" fill="#ffffff">WIPO</text>
+</svg>

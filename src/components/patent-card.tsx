@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState, memo } from 'react';
-import { Calendar, Building2, FileText, Scale, ExternalLink, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, Building2, FileText, Scale, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { getPatentDisplay, type PatentFigure } from '@/lib/patent-utils';
+import { PatentFigures } from '@/components/patent-figures';
 
 interface PatentCardProps {
   patent: {
@@ -12,19 +14,23 @@ interface PatentCardProps {
     url?: string;
     content: string;
     publication_date?: string;
+    figures?: PatentFigure[];
     metadata?: {
       patent_number?: string;
       application_number?: string;
       filing_date?: string;
       date_published?: string;
       parties_assignees_name?: string;
-      number_of_claims?: string;
+      number_of_claims?: string | number;
       ipcr_section?: string;
       ipcr_class?: string;
       ipcr_subclass?: string;
+      ipc?: string[];
+      cpc?: string[];
       total_citations?: number;
       patent_citations?: number;
       country?: string;
+      kind_code?: string;
       examiners?: string;
       bibliographic_data?: any;
     };
@@ -40,9 +46,13 @@ export const PatentCard = memo(function PatentCard({ patent, onClick, onCompare,
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
+  // Jurisdiction-aware identity (office, ST.16 triplet, kind-code-driven status).
+  const display = getPatentDisplay(patent.metadata, patent.content);
+  const figures = patent.figures || [];
+
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(patent.metadata?.patent_number || patent.id);
+    navigator.clipboard.writeText(display.formatted || patent.metadata?.patent_number || patent.id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -57,18 +67,10 @@ export const PatentCard = memo(function PatentCard({ patent, onClick, onCompare,
     });
   };
 
-  // Get status based on publication date
-  const getStatus = () => {
-    if (!patent.metadata?.date_published) return 'pending';
-    return 'granted';
-  };
-
-  const status = getStatus();
-
   // Extract abstract from content (first 200 chars)
   const getAbstract = () => {
     const content = patent.content || '';
-    const abstractMatch = content.match(/##\s*Abstract\s*\n\n([\s\S]*?)(?=\n##|\n\n##|$)/);
+    const abstractMatch = content.match(/##\s*Abstract\s*\n+([\s\S]*?)(?=\n##|$)/);
     if (abstractMatch && abstractMatch[1]) {
       return abstractMatch[1].trim().substring(0, 250) + '...';
     }
@@ -76,16 +78,13 @@ export const PatentCard = memo(function PatentCard({ patent, onClick, onCompare,
     return content.substring(0, 200).trim() + '...';
   };
 
-  // Build IPC classification string
-  const getIPCClass = () => {
-    const { ipcr_section, ipcr_class, ipcr_subclass } = patent.metadata || {};
-    if (ipcr_section && ipcr_class && ipcr_subclass) {
-      return `${ipcr_section}${ipcr_class}${ipcr_subclass}`;
-    }
-    return null;
-  };
-
-  const ipcClass = getIPCClass();
+  // Classification: prefer parsed IPC/CPC arrays, else build from IPCR fields.
+  const classification =
+    patent.metadata?.cpc?.[0] ||
+    patent.metadata?.ipc?.[0] ||
+    (patent.metadata?.ipcr_section && patent.metadata?.ipcr_class && patent.metadata?.ipcr_subclass
+      ? `${patent.metadata.ipcr_section}${patent.metadata.ipcr_class}${patent.metadata.ipcr_subclass}`
+      : null);
 
   return (
     <div
@@ -106,23 +105,20 @@ export const PatentCard = memo(function PatentCard({ patent, onClick, onCompare,
           <div className="flex items-center gap-2 mb-2">
             <div className="flex items-center gap-2">
               <img
-                src="/assets/banner/uspto.png"
-                alt="USPTO"
+                src={display.office.logo}
+                alt={display.office.label}
+                title={display.office.name}
                 className="w-4 h-4 object-contain"
               />
               <code className="text-sm font-semibold text-foreground font-mono">
-                US {patent.metadata?.patent_number || patent.id}
+                {display.formatted || patent.id}
               </code>
             </div>
             <Badge
-              variant={status === 'granted' ? 'default' : 'secondary'}
-              className={`text-[10px] px-2 py-0 ${
-                status === 'granted'
-                  ? 'bg-primary/10 text-primary border-primary/30'
-                  : 'bg-primary/10 text-primary border-primary/30'
-              }`}
+              variant={display.status === 'granted' ? 'default' : 'secondary'}
+              className="text-[10px] px-2 py-0 bg-primary/10 text-primary border-primary/30"
             >
-              {status === 'granted' ? 'Granted' : 'Pending'}
+              {display.statusLabel}
             </Badge>
             {patent.relevance_score && patent.relevance_score > 0.7 && (
               <Badge variant="secondary" className="text-[10px] px-2 py-0 bg-primary/10 text-primary border-primary/30">
@@ -156,10 +152,10 @@ export const PatentCard = memo(function PatentCard({ patent, onClick, onCompare,
                 <span>{patent.metadata.number_of_claims} claims</span>
               </div>
             )}
-            {ipcClass && (
+            {classification && (
               <div className="flex items-center gap-1">
                 <FileText className="w-3 h-3" />
-                <span className="font-mono">{ipcClass}</span>
+                <span className="font-mono">{classification}</span>
               </div>
             )}
           </div>
@@ -183,6 +179,13 @@ export const PatentCard = memo(function PatentCard({ patent, onClick, onCompare,
         <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
           {getAbstract()}
         </p>
+      )}
+
+      {/* Figures preview - searchers triage by scanning drawings first */}
+      {figures.length > 0 && (
+        <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+          <PatentFigures figures={figures} maxThumbnails={4} compact />
+        </div>
       )}
 
       {/* Expanded Details */}

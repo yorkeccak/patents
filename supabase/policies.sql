@@ -13,20 +13,18 @@ ALTER TABLE public.collection_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.patent_cache ENABLE ROW LEVEL SECURITY;
 
 -- Users table policies
+-- All access is self-scoped (auth.uid() = id). Do NOT add blanket
+-- USING (true) SELECT/UPDATE policies - they let any authenticated user read
+-- every user's email and overwrite any row. Server paths that need broader
+-- access use the service role, which bypasses RLS.
 CREATE POLICY "Users can view their own data" ON public.users
   FOR SELECT USING (auth.uid() = id);
 
 CREATE POLICY "Users can update their own data" ON public.users
   FOR UPDATE USING (auth.uid() = id);
 
-CREATE POLICY "Enable insert for authenticated users" ON public.users
-  FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Enable read access for authenticated users" ON public.users
-  FOR SELECT USING (true);
-
-CREATE POLICY "Enable update for authenticated users" ON public.users
-  FOR UPDATE USING (true);
+CREATE POLICY "Users can insert their own data" ON public.users
+  FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- Chat sessions policies
 CREATE POLICY "Users can manage own sessions" ON public.chat_sessions
@@ -93,20 +91,16 @@ CREATE POLICY "Anonymous users can delete csvs" ON public.csvs
   FOR DELETE USING (anonymous_id IS NOT NULL);
 
 -- Rate limits policies
+-- Self-scoped. Application writes go through the service role (which bypasses
+-- RLS), so no blanket USING (true) policy is needed for the app to function.
 CREATE POLICY "Users can view their own rate limits" ON public.user_rate_limits
   FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can update their own rate limits" ON public.user_rate_limits
   FOR UPDATE USING (auth.uid() = user_id);
 
-CREATE POLICY "Enable read access for authenticated users" ON public.user_rate_limits
-  FOR SELECT USING (true);
-
-CREATE POLICY "Enable update for authenticated users" ON public.user_rate_limits
-  FOR UPDATE USING (true);
-
-CREATE POLICY "Enable rate limit creation via trigger" ON public.user_rate_limits
-  FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can insert their own rate limits" ON public.user_rate_limits
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- Collections policies
 CREATE POLICY "collections_select_own" ON public.collections
@@ -168,3 +162,17 @@ CREATE POLICY "Authenticated users can cache patents" ON public.patent_cache
   FOR INSERT WITH CHECK (
     auth.role() = 'authenticated'
   );
+
+-- Function hardening -----------------------------------------------------
+-- Pin search_path on trigger functions (prevents search_path hijacking).
+ALTER FUNCTION public.set_updated_at() SET search_path = public, pg_temp;
+ALTER FUNCTION public.update_session_timestamp() SET search_path = public, pg_temp;
+ALTER FUNCTION public.update_session_last_message_at() SET search_path = public, pg_temp;
+
+-- These SECURITY DEFINER functions are invoked by triggers only and must not
+-- be callable as PostgREST RPCs. EXECUTE defaults to PUBLIC, so revoke there.
+-- Triggers still fire (execution does not check EXECUTE on the calling role).
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.handle_user_update() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.handle_user_delete() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_session_last_message_at() FROM PUBLIC, anon, authenticated;

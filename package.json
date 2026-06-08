@@ -2,12 +2,13 @@
   "name": "patentai",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-powered conversational patent search with access to USPTO, EPO, PCT patents, prior art search, FTO analysis, and Python analytics",
+  "description": "AI-powered conversational patent search across USPTO and EPO patents, with figures, prior art search, FTO analysis, and Python analytics",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.77",
@@ -77,6 +78,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.4.8",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.9"
   }
 }

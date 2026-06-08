@@ -1,6 +1,6 @@
 # PatentAI
 
-> **The world's first conversational patent search** - Access USPTO patents through natural language. Powered by Valyu's patent search infrastructure.
+> **The world's first conversational patent search** - Access USPTO and EPO patents, including drawings, through natural language. Powered by Valyu's patent search infrastructure.
 
 **[Try the live demo](https://patents.valyu.ai)**
 
@@ -26,7 +26,9 @@ PatentAI eliminates the friction. Ask questions in plain English. Get comprehens
 
 - **Conversational Search** - No Boolean syntax. No CPC codes. Just ask your question naturally.
 - **95% Faster** - What takes 4-8 hours takes 5 minutes. Get back to high-value work.
-- **Comprehensive Coverage** - USPTO, EPO, PCT, and international patents with English abstracts.
+- **US + European Coverage** - Search USPTO and EPO patents, or scope to one office with the `jurisdiction` parameter (`us` / `ep` / `all`).
+- **Patent Drawings** - View patent figures inline with a zoomable, keyboard-navigable lightbox.
+- **Correct Patent Identity** - Every result shows the canonical WIPO ST.16 reference (country + number + kind code, e.g. `EP 4,181,262 A1`) with a plain-language kind-code explainer.
 - **Advanced Analytics** - Execute Python for citation analysis, portfolio metrics, technology landscapes.
 - **Interactive Visualizations** - Beautiful charts for competitive intelligence and trend analysis.
 - **Local AI Models** - Run with Ollama or LM Studio for unlimited, private searches.
@@ -36,7 +38,7 @@ PatentAI eliminates the friction. Ask questions in plain English. Get comprehens
 
 ### Patent Search Tools
 
-- **Patent Search** - Semantic search across millions of patents (USPTO, EPO, PCT)
+- **Patent Search** - Semantic search across millions of USPTO and EPO patents, with figures
 - **Prior Art Search** - Find anticipating references for patentability assessment
 - **Competitive Intelligence** - Analyze competitor portfolios and technology strategies
 - **Freedom-to-Operate** - Identify blocking patents and infringement risks
@@ -156,7 +158,7 @@ Ollama provides unlimited, private LLM inference on your local machine.
 
 - **Frontend**: Next.js 15 with App Router, Tailwind CSS, shadcn/ui
 - **AI**: OpenAI GPT-4 + Ollama/LM Studio for local models
-- **Data**: Valyu API for comprehensive patent data (USPTO, EPO, PCT)
+- **Data**: Valyu API for comprehensive patent data (USPTO and EPO)
 - **Code Execution**: Daytona sandboxes for secure Python execution
 - **Visualizations**: Recharts for interactive charts
 - **Authentication**: Sign in with Valyu (production)

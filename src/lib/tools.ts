@@ -52,11 +52,14 @@ async function callValyuApi(
     console.log(`[Valyu Direct] Calling ${path} with server API key`);
     const valyu = new Valyu(apiKey, "https://api.valyu.ai/v1");
 
-    // Map path to SDK method
+    // Map path to SDK method. The SDK's SearchOptions uses camelCase
+    // (maxNumResults / includedSources); patentSearch sends snake_case in the
+    // proxy body, so read both casings or the source restriction silently
+    // no-ops on the server-key path.
     if (path === '/v1/search' || path === '/v1/deepsearch') {
       return valyu.search(body.query as string, {
-        maxNumResults: body.maxNumResults as number,
-        includedSources: body.includedSources as string[],
+        maxNumResults: (body.maxNumResults ?? body.max_num_results) as number,
+        includedSources: (body.includedSources ?? body.included_sources) as string[],
       });
     }
 
@@ -603,8 +606,10 @@ ${execution.result || '(No output produced)'}
     inputSchema: z.object({
       query: z.string().describe('Natural language patent search query (e.g., "Google AI patents 2024", "Tesla battery patents 2020-2024")'),
       maxResults: z.number().min(1).max(20).optional().default(10).describe('Number of results (default: 10, max: 20)'),
+      jurisdiction: z.enum(['us', 'ep', 'all']).optional().default('all')
+        .describe('Patent office to search: "us" (USPTO), "ep" (European Patent Office), or "all" (both, default). Use "us" for US-only prosecution/FTO, "ep" for European FTO, "all" for novelty and landscape searches.'),
     }),
-    execute: async ({ query, maxResults }, options) => {
+    execute: async ({ query, maxResults, jurisdiction }, options) => {
       const userId = (options as any)?.experimental_context?.userId;
       const sessionId = (options as any)?.experimental_context?.sessionId;
       const userTier = (options as any)?.experimental_context?.userTier;
@@ -623,13 +628,24 @@ ${execution.result || '(No output produced)'}
         // Ensure maxNumResults is within API limits (1-20)
         const clampedMaxResults = Math.min(Math.max(maxResults || 10, 1), 20);
 
+        // Map the requested jurisdiction to the public Valyu patent source ids.
+        // Keep this a flat map of the two approved consumer source ids - no
+        // internal routing hints.
+        const JURISDICTION_SOURCES: Record<'us' | 'ep' | 'all', string[]> = {
+          us: ["valyu/valyu-patents"],
+          ep: ["valyu/valyu-patents-epo"],
+          all: ["valyu/valyu-patents", "valyu/valyu-patents-epo"],
+        };
+        const selected = jurisdiction ?? 'all';
+        const includedSources = JURISDICTION_SOURCES[selected];
+
         // Call Valyu API (via proxy if user has OAuth token, otherwise direct)
         const response = await callValyuApi(
           '/v1/deepsearch',
           {
             query,
             max_num_results: clampedMaxResults,
-            included_sources: ["valyu/valyu-patents"],
+            included_sources: includedSources,
           },
           valyuAccessToken
         );
@@ -643,7 +659,13 @@ ${execution.result || '(No output produced)'}
         });
 
         // Cache full patent content and return truncated results
-        const { extractPatentAbstract, parsePatentMetadata, extractPatentNumber } = await import('./patent-utils');
+        const {
+          extractPatentAbstract,
+          parsePatentMetadata,
+          extractPatentNumber,
+          extractPatentFigures,
+          getPatentDisplay,
+        } = await import('./patent-utils');
         const { cachePatent, clearPatentIndices } = await import('./db');
 
         // CRITICAL: Clear old indices before caching new search results
@@ -656,10 +678,64 @@ ${execution.result || '(No output produced)'}
 
         const truncatedResults = await Promise.all(
           (response?.results || []).map(async (patent: any, index: number) => {
-            // Extract abstract and metadata
-            const abstract = extractPatentAbstract(patent.content);
-            const metadata = parsePatentMetadata(patent.content);
-            const patentNumber = extractPatentNumber(patent.content, patent.title);
+            // The API returns a rich structured metadata object - prefer it and
+            // use content parsing only as a fallback for fields it omits.
+            const apiMeta = (patent.metadata || {}) as Record<string, any>;
+            const parsed = parsePatentMetadata(patent.content);
+            const abstract = apiMeta.abstract || extractPatentAbstract(patent.content);
+
+            // Jurisdiction-aware identity (country, kind code, ST.16 triplet).
+            const display = getPatentDisplay(apiMeta, patent.content);
+
+            // Figures: prefer the API's signed image-url map, fall back to
+            // absolute markdown image refs in the content.
+            const figures = extractPatentFigures(patent.content, patent.image_url || patent.imageUrl);
+
+            // Assignee/applicant: US uses parties_assignees_name; EPO uses applicants[].
+            const assigneeName =
+              apiMeta.parties_assignees_name ||
+              apiMeta.applicants?.[0]?.name ||
+              parsed.assignees?.[0]?.name;
+
+            // IPC and CPC kept separate (not interchangeable).
+            const ipc =
+              (Array.isArray(apiMeta.ipcr_classifications)
+                ? apiMeta.ipcr_classifications.map((c: any) => c?.raw).filter(Boolean)
+                : undefined) || parsed.ipc;
+            const cpc = apiMeta.cpc_classifications || parsed.cpc;
+
+            // Allowlisted display metadata (no internal API field names leak to
+            // the public client; canonical number for stable cache keys).
+            const displayMetadata = {
+              patent_number: display.formatted,
+              country: display.country,
+              kind_code: display.kindCode,
+              status: display.status,
+              application_number: apiMeta.application_number || parsed.applicationNumber,
+              filing_date: apiMeta.filing_date || parsed.filingDate,
+              date_published: apiMeta.date_published || parsed.publicationDate,
+              priority_date: parsed.priorityDate,
+              parties_assignees_name: assigneeName,
+              number_of_claims: apiMeta.number_of_claims || parsed.claimsCount,
+              ipcr_section: apiMeta.ipcr_section,
+              ipcr_class: apiMeta.ipcr_class,
+              ipcr_subclass: apiMeta.ipcr_subclass,
+              ipc,
+              cpc,
+              total_citations: apiMeta.total_citations,
+              patent_citations: apiMeta.patent_citations,
+              designated_states: apiMeta.designated_states,
+              language: apiMeta.language,
+              figures,
+            };
+
+            // Stable cache key: canonical triplet, else a per-index sentinel so
+            // multiple "Unknown" foreign results can't collide and overwrite.
+            const canonical = extractPatentNumber(patent.content, patent.title);
+            const patentNumber =
+              display.number ? display.formatted
+              : canonical !== 'Unknown' ? canonical
+              : `UNKNOWN-${index}`;
 
             // Cache full patent content if we have a session
             // NOTE: Caches ALL unique patents (by patent_number) across multiple searches
@@ -675,7 +751,7 @@ ${execution.result || '(No output produced)'}
                   url: patent.url,
                   abstract: abstract,
                   full_content: patent.content,
-                  metadata: metadata,
+                  metadata: displayMetadata,
                 });
                 if (result.error) {
                   console.error(`[PatentSearch] Cache error for patent ${index}:`, result.error);
@@ -693,15 +769,21 @@ ${execution.result || '(No output produced)'}
             // Return truncated version with just abstract
             return {
               patentIndex: index,
-              patentNumber: patentNumber,
+              patentNumber: display.formatted,
               title: patent.title,
               abstract: abstract,
               content: abstract, // For UI compatibility - shows in patent cards
               url: patent.url,
-              assignees: metadata.assignees?.map(a => a.name) || [],
-              filingDate: metadata.filingDate,
-              publicationDate: metadata.publicationDate,
-              claimsCount: metadata.claimsCount,
+              country: display.country,
+              kindCode: display.kindCode,
+              status: display.status,
+              assignees: assigneeName ? [assigneeName] : [],
+              filingDate: displayMetadata.filing_date,
+              publicationDate: displayMetadata.date_published,
+              claimsCount: displayMetadata.number_of_claims,
+              figures,
+              imageUrl: patent.image_url || patent.imageUrl || {},
+              metadata: displayMetadata,
               relevance_score: patent.relevance_score,
               fullContentCached: !!sessionId,
               // Keep original fields for UI compatibility
@@ -718,14 +800,20 @@ ${execution.result || '(No output produced)'}
         };
         console.log('[PatentSearch] Cache stats:', cacheStats);
 
+        // Reflect what was actually queried (never advertise uncovered offices).
+        const displaySource =
+          selected === 'us' ? 'USPTO Patents'
+          : selected === 'ep' ? 'EPO Patents'
+          : 'USPTO + EPO Patents';
+
         return JSON.stringify({
           type: "patents",
           query: query,
+          jurisdiction: selected,
           resultCount: truncatedResults.length,
           results: truncatedResults,
-          favicon: 'https://www.uspto.gov/favicon.ico',
-          displaySource: 'USPTO / EPO / PCT Patents',
-          note: `IMPORTANT: Abstracts only - Full content cached for session ${cacheStats.sessionId} (${cacheStats.patentsCached} patents). To access complete patent details (claims, description, citations), use readFullPatent tool with the patentIndex field from these results. Example: readFullPatent({patentIndex: 0}) for the first patent, readFullPatent({patentIndex: 2}) for the third patent, etc.`,
+          displaySource,
+          note: `IMPORTANT: Abstracts only - Full content cached for session ${cacheStats.sessionId} (${cacheStats.patentsCached} patents). To access complete patent details (claims, description, citations, figures), use readFullPatent tool with the patentIndex field from these results. Example: readFullPatent({patentIndex: 0}) for the first patent, readFullPatent({patentIndex: 2}) for the third patent, etc.`,
           _debug: cacheStats,
         }, null, 2);
       } catch (error) {
@@ -786,7 +874,7 @@ ${execution.result || '(No output produced)'}
 
       try {
         const { getFullPatent } = await import('./db');
-        const { parsePatentSections } = await import('./patent-utils');
+        const { parsePatentSections, extractClassifications, extractPatentFigures } = await import('./patent-utils');
 
         console.log('[ReadFullPatent] Fetching patent from cache:', { sessionId, patentIndex });
 
@@ -823,7 +911,7 @@ ${execution.result || '(No output produced)'}
         );
 
         // Parse metadata if it's a string
-        let metadata = cachedPatent.metadata;
+        let metadata: any = cachedPatent.metadata;
         if (typeof metadata === 'string') {
           try {
             metadata = JSON.parse(metadata);
@@ -832,15 +920,32 @@ ${execution.result || '(No output produced)'}
           }
         }
 
+        const fullContent = cachedPatent.fullContent || cachedPatent.full_content || '';
+        // Surface figures (cached at search time, else re-derived) and
+        // classifications so the model can cite FIG. N and CPC/IPC in charts.
+        const figures = metadata?.figures?.length
+          ? metadata.figures
+          : extractPatentFigures(fullContent);
+        const classifications = {
+          ipc: metadata?.ipc || extractClassifications(fullContent).ipc,
+          cpc: metadata?.cpc || extractClassifications(fullContent).cpc,
+        };
+
         return JSON.stringify({
           success: true,
           patentIndex: patentIndex,
           patentNumber: cachedPatent.patentNumber || cachedPatent.patent_number,
+          country: metadata?.country,
+          kindCode: metadata?.kind_code,
+          status: metadata?.status,
+          priorityDate: metadata?.priority_date,
           title: cachedPatent.title,
           url: cachedPatent.url,
           metadata: metadata,
+          classifications,
+          figures,
           sections: parsedSections,
-          note: 'Use this detailed information to create claim charts, perform FTO analysis, or conduct deep technical comparison.'
+          note: 'Use this detailed information to create element-by-element claim charts (cite col:line / paragraph / FIG. N), perform jurisdiction-specific FTO analysis on in-force granted claims, or conduct deep technical comparison. Every legal/validity statement must cite the exact patent and passage.'
         }, null, 2);
 
       } catch (error) {
