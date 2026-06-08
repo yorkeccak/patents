@@ -57,9 +57,13 @@ async function callValyuApi(
     // proxy body, so read both casings or the source restriction silently
     // no-ops on the server-key path.
     if (path === '/v1/search' || path === '/v1/deepsearch') {
+      const startDate = (body.startDate ?? body.start_date) as string | undefined;
+      const endDate = (body.endDate ?? body.end_date) as string | undefined;
       return valyu.search(body.query as string, {
         maxNumResults: (body.maxNumResults ?? body.max_num_results) as number,
         includedSources: (body.includedSources ?? body.included_sources) as string[],
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
       });
     }
 
@@ -608,8 +612,12 @@ ${execution.result || '(No output produced)'}
       maxResults: z.number().min(1).max(10).optional().default(6).describe('Number of results (default: 6, max: 10). Keep this small - patent documents are large; request only what you need and use readFullPatent to drill into specific patents.'),
       jurisdiction: z.enum(['us', 'ep', 'all']).optional().default('all')
         .describe('Patent office to search: "us" (USPTO), "ep" (European Patent Office), or "all" (both, default). Use "us" for US-only prosecution/FTO, "ep" for European FTO, "all" for novelty and landscape searches.'),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional()
+        .describe('Only return patents published on or after this date (YYYY-MM-DD). Derive this from the user\'s date range, e.g. "patents since 2020" -> "2020-01-01", "2018-2022" -> startDate "2018-01-01".'),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional()
+        .describe('Only return patents published on or before this date (YYYY-MM-DD). Derive from the user\'s range, e.g. "2018-2022" -> endDate "2022-12-31".'),
     }),
-    execute: async ({ query, maxResults, jurisdiction }, options) => {
+    execute: async ({ query, maxResults, jurisdiction, startDate, endDate }, options) => {
       const userId = (options as any)?.experimental_context?.userId;
       const sessionId = (options as any)?.experimental_context?.sessionId;
       const userTier = (options as any)?.experimental_context?.userTier;
@@ -640,23 +648,48 @@ ${execution.result || '(No output produced)'}
         const selected = jurisdiction ?? 'all';
         const includedSources = JURISDICTION_SOURCES[selected];
 
+        // The Valyu date params bias relevance but do NOT hard-filter patent
+        // results, so we over-fetch when a date range is set and enforce the
+        // range ourselves below. Capped at the API's max of 20.
+        const hasDateFilter = !!(startDate || endDate);
+        const fetchCount = hasDateFilter ? Math.min(20, clampedMaxResults * 3) : clampedMaxResults;
+
         // Call Valyu API (via proxy if user has OAuth token, otherwise direct)
         const response = await callValyuApi(
           '/v1/deepsearch',
           {
             query,
-            max_num_results: clampedMaxResults,
+            max_num_results: fetchCount,
             included_sources: includedSources,
+            // Date hint (publication date). Omit keys when unset.
+            ...(startDate ? { start_date: startDate } : {}),
+            ...(endDate ? { end_date: endDate } : {}),
           },
           valyuAccessToken
         );
 
         console.log("[PatentSearch] Response received, results:", response?.results?.length || 0);
 
+        // Enforce the date range by publication date (the API does not), then
+        // trim back to the number of results the caller actually asked for.
+        const inRange = (p: any): boolean => {
+          if (!hasDateFilter) return true;
+          const pub = p?.publication_date || p?.metadata?.date_published;
+          if (!pub) return false; // no date -> can't confirm it's in range, drop it
+          const d = String(pub).slice(0, 10);
+          if (startDate && d < startDate) return false;
+          if (endDate && d > endDate) return false;
+          return true;
+        };
+        const filteredResults = (response?.results || []).filter(inRange).slice(0, clampedMaxResults);
+        if (hasDateFilter) {
+          console.log(`[PatentSearch] Date filter ${startDate || '*'}..${endDate || '*'}: ${response?.results?.length || 0} -> ${filteredResults.length} in range`);
+        }
+
         await track("Valyu API Call", {
           toolType: "patentSearch",
           query: query,
-          resultCount: response?.results?.length || 0,
+          resultCount: filteredResults.length,
         });
 
         // Cache full patent content and return truncated results
@@ -678,7 +711,7 @@ ${execution.result || '(No output produced)'}
         }
 
         const truncatedResults = await Promise.all(
-          (response?.results || []).map(async (patent: any, index: number) => {
+          filteredResults.map(async (patent: any, index: number) => {
             // The API returns a rich structured metadata object - prefer it and
             // use content parsing only as a fallback for fields it omits.
             const apiMeta = (patent.metadata || {}) as Record<string, any>;
@@ -815,10 +848,11 @@ ${execution.result || '(No output produced)'}
           type: "patents",
           query: query,
           jurisdiction: selected,
+          ...(hasDateFilter ? { dateFilter: { startDate: startDate || null, endDate: endDate || null } } : {}),
           resultCount: truncatedResults.length,
           results: truncatedResults,
           displaySource,
-          note: `IMPORTANT: Abstracts only - Full content cached for session ${cacheStats.sessionId} (${cacheStats.patentsCached} patents). To access complete patent details (claims, description, citations, figures), use readFullPatent tool with the patentIndex field from these results. Example: readFullPatent({patentIndex: 0}) for the first patent, readFullPatent({patentIndex: 2}) for the third patent, etc.`,
+          note: `IMPORTANT: Abstracts only${hasDateFilter ? `, filtered to publication dates ${startDate || 'any'}..${endDate || 'any'}` : ''} - Full content cached for session ${cacheStats.sessionId} (${cacheStats.patentsCached} patents). To access complete patent details (claims, description, citations, figures), use readFullPatent tool with the patentIndex field from these results. Example: readFullPatent({patentIndex: 0}) for the first patent, readFullPatent({patentIndex: 2}) for the third patent, etc.`,
           _debug: cacheStats,
         }, null, 2);
       } catch (error) {

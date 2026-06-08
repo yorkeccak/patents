@@ -224,6 +224,7 @@ export async function POST(req: Request) {
       - Abstracts provide sufficient detail for initial relevance assessment
       - Use this for: patent landscape analysis, portfolio overviews, initial screening, competitive intelligence
       - **jurisdiction** parameter ('us' | 'ep' | 'all'): choose deliberately. Use 'us' for US-only prosecution or US freedom-to-operate, 'ep' for European freedom-to-operate, and 'all' (default) for novelty and landscape searches. FTO is jurisdiction-specific - clear a product only in the offices where it will be commercialized.
+      - **startDate / endDate** parameters (YYYY-MM-DD, filter by publication date): set these whenever the user gives any date constraint. Convert ranges to full dates - "since 2020" -> startDate "2020-01-01"; "before 2015" -> endDate "2014-12-31"; "2018-2022" -> startDate "2018-01-01", endDate "2022-12-31"; "in 2023" -> startDate "2023-01-01", endDate "2023-12-31". For prior-art/novelty searches, set endDate to just before the invention's priority date so only earlier art is returned.
       ${user ? `
       ### 2. readFullPatent (Deep Dive Analysis)
       - Retrieves complete patent details (full claims, description, citations) by patentIndex
