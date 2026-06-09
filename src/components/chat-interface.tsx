@@ -2142,19 +2142,23 @@ export function ChatInterface({
 
     // ONLY auto-scroll if sticky is enabled AND streaming/submitted
     const isLoading = status === "submitted" || status === "streaming";
-    if (isLoading && shouldStickToBottomRef.current) {
+    // Skip entirely while the tab is hidden: this runs on every streamed token,
+    // and queuing animated scrolls on a backgrounded tab piles up work that
+    // contributes to the renderer running out of memory.
+    if (isLoading && shouldStickToBottomRef.current && !document.hidden) {
       // Small delay to let content render
       requestAnimationFrame(() => {
         const c = messagesContainerRef.current;
+        // Instant ("auto") scroll during streaming - a smooth animation queued
+        // on every token stacks reflow work and is the wrong behavior here.
         if (c && c.scrollHeight > c.clientHeight + 1) {
-          c.scrollTo({ top: c.scrollHeight, behavior: "smooth" });
+          c.scrollTo({ top: c.scrollHeight, behavior: "auto" });
         } else {
           const doc = document.scrollingElement || document.documentElement;
           const targetTop = doc.scrollHeight;
-          window.scrollTo({ top: targetTop, behavior: "smooth" });
+          window.scrollTo({ top: targetTop, behavior: "auto" });
         }
       });
-    } else {
     }
   }, [messages, status, isAtBottomState, anchorInView]);
 
